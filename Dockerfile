@@ -1,8 +1,6 @@
-FROM python:3.13-slim
+FROM ghcr.io/astral-sh/uv:debian-slim
 
 WORKDIR /app
-
-RUN pip install uv
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --no-dev --frozen

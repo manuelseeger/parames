@@ -3,7 +3,7 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-    command: python -m parames.scheduler
+    command: uv run python -m parames.scheduler
     environment:
       PARAMES_CONFIG_PATH: /app/config/default.yaml
       PARAMES_TELEGRAM_BOT_TOKEN: ${PARAMES_TELEGRAM_BOT_TOKEN}
