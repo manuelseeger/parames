@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-04-27T18:01:17+02:00",
+  "captured_at": "2026-04-27T18:38:32+02:00",
   "timezone": "Europe/Zurich",
   "profile_name": "zurich_bise",
   "requests": [
@@ -86,19 +86,87 @@
     {
       "alert_name": "zurich_bise",
       "start": "2026-04-29T11:00:00+02:00",
-      "end": "2026-04-29T15:00:00+02:00",
-      "duration_hours": 4,
-      "avg_wind_speed_kmh": 12.9125,
-      "max_wind_speed_kmh": 15.6,
-      "avg_direction_deg": 43.62167278916428,
-      "bise_pressure_gradient_hpa": 2.8625000000000114,
+      "end": "2026-04-29T18:00:00+02:00",
+      "duration_hours": 7,
+      "avg_wind_speed_kmh": 14.992857142857144,
+      "max_wind_speed_kmh": 18.9,
+      "avg_direction_deg": 49.012586580990956,
+      "bise_pressure_gradient_hpa": 3.1357142857142923,
       "models": [
         "icon_d2",
         "meteoswiss_icon_ch2"
       ],
       "dry_filter_applied": false,
-      "score": 5,
-      "classification": "strong"
+      "score": 6,
+      "classification": "strong",
+      "hours": [
+        {
+          "time": "2026-04-29T09:00:00+02:00",
+          "avg_wind_speed_kmh": 8.75,
+          "avg_direction_deg": 17.5,
+          "in_window": false
+        },
+        {
+          "time": "2026-04-29T10:00:00+02:00",
+          "avg_wind_speed_kmh": 10.0,
+          "avg_direction_deg": 29.0,
+          "in_window": false
+        },
+        {
+          "time": "2026-04-29T11:00:00+02:00",
+          "avg_wind_speed_kmh": 10.9,
+          "avg_direction_deg": 35.5,
+          "in_window": true
+        },
+        {
+          "time": "2026-04-29T12:00:00+02:00",
+          "avg_wind_speed_kmh": 12.5,
+          "avg_direction_deg": 38.5,
+          "in_window": true
+        },
+        {
+          "time": "2026-04-29T13:00:00+02:00",
+          "avg_wind_speed_kmh": 13.4,
+          "avg_direction_deg": 44.5,
+          "in_window": true
+        },
+        {
+          "time": "2026-04-29T14:00:00+02:00",
+          "avg_wind_speed_kmh": 15.3,
+          "avg_direction_deg": 52.5,
+          "in_window": true
+        },
+        {
+          "time": "2026-04-29T15:00:00+02:00",
+          "avg_wind_speed_kmh": 16.55,
+          "avg_direction_deg": 55.0,
+          "in_window": true
+        },
+        {
+          "time": "2026-04-29T16:00:00+02:00",
+          "avg_wind_speed_kmh": 17.65,
+          "avg_direction_deg": 58.0,
+          "in_window": true
+        },
+        {
+          "time": "2026-04-29T17:00:00+02:00",
+          "avg_wind_speed_kmh": 18.65,
+          "avg_direction_deg": 59.0,
+          "in_window": true
+        },
+        {
+          "time": "2026-04-29T18:00:00+02:00",
+          "avg_wind_speed_kmh": 19.3,
+          "avg_direction_deg": 57.0,
+          "in_window": false
+        },
+        {
+          "time": "2026-04-29T19:00:00+02:00",
+          "avg_wind_speed_kmh": 18.4,
+          "avg_direction_deg": 55.0,
+          "in_window": false
+        }
+      ]
     }
   ]
 }
