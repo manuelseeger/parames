@@ -1,0 +1,104 @@
+{
+  "captured_at": "2026-04-27T18:01:17+02:00",
+  "timezone": "Europe/Zurich",
+  "profile_name": "zurich_bise",
+  "requests": [
+    {
+      "name": "alert_meteoswiss_icon_ch2",
+      "location": {
+        "name": "zurich_allmend",
+        "latitude": 47.357,
+        "longitude": 8.509
+      },
+      "model": "meteoswiss_icon_ch2",
+      "hourly_variables": [
+        "wind_speed_10m",
+        "wind_direction_10m",
+        "precipitation",
+        "pressure_msl"
+      ]
+    },
+    {
+      "name": "west_meteoswiss_icon_ch2",
+      "location": {
+        "name": "geneva",
+        "latitude": 46.204,
+        "longitude": 6.143
+      },
+      "model": "meteoswiss_icon_ch2",
+      "hourly_variables": [
+        "pressure_msl"
+      ]
+    },
+    {
+      "name": "east_meteoswiss_icon_ch2",
+      "location": {
+        "name": "guettingen",
+        "latitude": 47.604,
+        "longitude": 9.287
+      },
+      "model": "meteoswiss_icon_ch2",
+      "hourly_variables": [
+        "pressure_msl"
+      ]
+    },
+    {
+      "name": "alert_icon_d2",
+      "location": {
+        "name": "zurich_allmend",
+        "latitude": 47.357,
+        "longitude": 8.509
+      },
+      "model": "icon_d2",
+      "hourly_variables": [
+        "wind_speed_10m",
+        "wind_direction_10m",
+        "precipitation",
+        "pressure_msl"
+      ]
+    },
+    {
+      "name": "west_icon_d2",
+      "location": {
+        "name": "geneva",
+        "latitude": 46.204,
+        "longitude": 6.143
+      },
+      "model": "icon_d2",
+      "hourly_variables": [
+        "pressure_msl"
+      ]
+    },
+    {
+      "name": "east_icon_d2",
+      "location": {
+        "name": "guettingen",
+        "latitude": 47.604,
+        "longitude": 9.287
+      },
+      "model": "icon_d2",
+      "hourly_variables": [
+        "pressure_msl"
+      ]
+    }
+  ],
+  "expected_windows": [
+    {
+      "alert_name": "zurich_bise",
+      "start": "2026-04-29T11:00:00+02:00",
+      "end": "2026-04-29T15:00:00+02:00",
+      "duration_hours": 4,
+      "avg_wind_speed_kmh": 12.9125,
+      "max_wind_speed_kmh": 15.6,
+      "avg_direction_deg": 43.62167278916428,
+      "bise_pressure_gradient_hpa": 2.8625000000000114,
+      "models": [
+        "icon_d2",
+        "meteoswiss_icon_ch2"
+      ],
+      "dry_filter_applied": false,
+      "score": 5,
+      "classification": "strong"
+    }
+  ]
+}

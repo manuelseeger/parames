@@ -1,0 +1,49 @@
+defaults:
+  forecast_hours: 48
+  wind_level_m: 10
+  model_agreement:
+    required: true
+    min_models_matching: 2
+    max_direction_delta_deg: 35
+    max_speed_delta_kmh: 8.0
+
+alerts:
+  - name: zurich_bise
+    description: "NE/E wind for ground handling - Zurich Allmend"
+    location:
+      name: zurich_allmend
+      latitude: 47.357
+      longitude: 8.509
+    models:
+      - meteoswiss_icon_ch2
+      - icon_d2
+    wind:
+      min_speed_kmh: 8.0
+      strong_speed_kmh: 10.0
+      direction_min_deg: 30
+      direction_max_deg: 100
+      min_consecutive_hours: 2
+    time_window:
+      start_hour: 8
+      end_hour: 20
+    dry:
+      enabled: false
+      max_precipitation_mm_per_hour: 0.2
+    bise:
+      enabled: true
+      east_minus_west_pressure_hpa_min: 1.5
+      boost_if_bise: true
+      pressure_reference_west:
+        name: geneva
+        latitude: 46.204
+        longitude: 6.143
+      pressure_reference_east:
+        name: guettingen
+        latitude: 47.604
+        longitude: 9.287
+    delivery:
+      - console
+
+delivery_channels:
+  console:
+    type: console

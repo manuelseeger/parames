@@ -4,4 +4,35 @@ version = "0.1.0"
 description = "Custom paragliding forecasting tool"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "certifi>=2026.4.22",
+    "click>=8.1.8",
+    "httpx>=0.28.1",
+    "pydantic>=2.11.4",
+    "pydantic-settings>=2.9.1",
+    "pyyaml>=6.0.2",
+    "rich>=14.0.0",
+    "tzdata>=2025.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+]
+
+[project.scripts]
+parames = "parames.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/parames"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+markers = [
+    "integration: marks tests that call the live Open-Meteo API",
+]
+
