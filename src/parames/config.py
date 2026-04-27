@@ -109,6 +109,7 @@ class AppConfig(BaseModel):
 class RuntimeSettings(BaseSettings):
     config_path: Path = Path("config/default.yaml")
     telegram_bot_token: SecretStr | None = None
+    mongo_uri: str = "mongodb://localhost:27017/parames"
 
     model_config = SettingsConfigDict(
         env_prefix="PARAMES_",

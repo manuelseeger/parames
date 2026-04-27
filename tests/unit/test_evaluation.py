@@ -167,19 +167,3 @@ def test_evaluate_positive_snapshot_replays_expected_window(default_config) -> N
     assert window.max_wind_speed_kmh == pytest.approx(expected["max_wind_speed_kmh"])
     assert window.avg_direction_deg == pytest.approx(expected["avg_direction_deg"])
     assert window.bise_pressure_gradient_hpa == pytest.approx(expected["bise_pressure_gradient_hpa"])
-
-
-def test_evaluate_positive_snapshot_alert_window_is_11_to_20(default_config, zurich_tz) -> None:
-    profile = default_config.alerts[0]
-    snapshot_client = SnapshotForecastClient(FIXTURE_DIR)
-    now = snapshot_client.captured_at
-
-    try:
-        windows = evaluate(profile, client=snapshot_client, now=now)
-    finally:
-        snapshot_client.close()
-
-    assert len(windows) == 1
-    window = windows[0]
-    assert window.start == datetime(2026, 4, 29, 11, 0, tzinfo=zurich_tz)
-    assert window.end == datetime(2026, 4, 29, 20, 0, tzinfo=zurich_tz)

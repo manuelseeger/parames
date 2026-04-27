@@ -80,6 +80,8 @@ def _format_window(alert_name: str, window: CandidateWindow) -> str:
 
 
 class TelegramChannel:
+    dedupe: bool = True
+
     def __init__(self, *, bot_token: str, chat_id: str) -> None:
         self._bot_token = bot_token
         self._chat_id = chat_id

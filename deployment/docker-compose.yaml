@@ -1,0 +1,35 @@
+services:
+  scheduler:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: python -m parames.scheduler
+    environment:
+      PARAMES_CONFIG_PATH: /app/config/default.yaml
+      PARAMES_TELEGRAM_BOT_TOKEN: ${PARAMES_TELEGRAM_BOT_TOKEN}
+      PARAMES_MONGO_URI: mongodb://mongo:27017/parames
+    volumes:
+      - ../config:/app/config:ro
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:8
+    environment:
+      MONGO_INITDB_DATABASE: parames
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  mongo_data:

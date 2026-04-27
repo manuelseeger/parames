@@ -1,6 +1,8 @@
 # parames
 
-Paragliding wind alert proof of concept for Zurich Bise ground handling.
+Paragliding meteo notifications
+
+PoC alerts for Zurich Bise ground handling
 
 ## Usage
 

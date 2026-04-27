@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pyodmongo import MainBaseModel
 
 
-class WindowHour(BaseModel):
+class WindowHour(MainBaseModel):
     """Per-hour data point within a CandidateWindow, used for charting."""
 
     time: datetime
@@ -15,7 +15,7 @@ class WindowHour(BaseModel):
     in_window: bool = True  # False for ±context hours outside the alert window
 
 
-class HourForecast(BaseModel):
+class HourForecast(MainBaseModel):
     time: datetime
     wind_speed: float | None = None
     wind_direction: float | None = None
@@ -23,7 +23,7 @@ class HourForecast(BaseModel):
     pressure_msl: float | None = None
 
 
-class CandidateWindow(BaseModel):
+class CandidateWindow(MainBaseModel):
     alert_name: str
     start: datetime
     end: datetime
