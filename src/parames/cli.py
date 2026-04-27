@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 
 from parames.config import RuntimeSettings, load_app_config
-from parames.delivery import ConsoleChannel
+from parames.delivery.delivery_cli import ConsoleChannel
 from parames.evaluation import evaluate
 from parames.forecast import ForecastClientError, OpenMeteoForecastClient
 
@@ -20,7 +20,7 @@ def _default_config_path() -> Path:
     "config_path",
     default=lambda: str(_default_config_path()),
     show_default=True,
-    type=click.Path(path_type=Path, dir_okay=False),
+    type=click.Path(exists=True, path_type=Path, dir_okay=False),
     help="Path to the YAML configuration file.",
 )
 def main(config_path: Path) -> None:

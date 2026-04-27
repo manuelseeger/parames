@@ -5,7 +5,7 @@ from io import StringIO
 
 from rich.console import Console
 
-from parames.delivery import ConsoleChannel
+from parames.delivery.delivery_cli import ConsoleChannel
 from parames.domain import CandidateWindow, WindowHour
 
 

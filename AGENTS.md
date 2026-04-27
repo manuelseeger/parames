@@ -4,6 +4,8 @@ Use:
 - httpx
 - rich
 - click
+- fastapi
+- pyodmongo
 - pydantic
 - pydantic-settings
 - pytest
