@@ -5,6 +5,7 @@ description = "Custom paragliding forecasting tool"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "aiogram>=3.27.0",
     "certifi>=2026.4.22",
     "click>=8.1.8",
     "httpx>=0.28.1",

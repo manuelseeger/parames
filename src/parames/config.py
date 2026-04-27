@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -108,6 +108,7 @@ class AppConfig(BaseModel):
 
 class RuntimeSettings(BaseSettings):
     config_path: Path = Path("config/default.yaml")
+    telegram_bot_token: SecretStr | None = None
 
     model_config = SettingsConfigDict(
         env_prefix="PARAMES_",

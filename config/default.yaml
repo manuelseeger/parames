@@ -44,7 +44,11 @@ alerts:
         longitude: 9.287
     delivery:
       - console
+      - telegram
 
 delivery_channels:
   console:
     type: console
+  telegram:
+    type: telegram
+    chat_id: "@mes_meteo"

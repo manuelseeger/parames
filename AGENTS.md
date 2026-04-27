@@ -8,7 +8,8 @@ Use:
 - pyodmongo
 - pydantic
 - pydantic-settings
-- pytest
+- aiogram
+- pytest    
 
 
 uv for package managment and running

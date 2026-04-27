@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from io import StringIO
 
@@ -9,11 +10,14 @@ from parames.delivery.delivery_cli import ConsoleChannel
 from parames.domain import CandidateWindow, WindowHour
 
 
-def test_console_channel_renders_precipitation() -> None:
-    buffer = StringIO()
-    console = Console(file=buffer, force_terminal=False, color_system=None, width=120)
-    channel = ConsoleChannel(console=console)
-    window = CandidateWindow(
+def _make_window(
+    *,
+    score: int = 4,
+    classification: str = "candidate",
+    avg_precipitation_mm_per_hour: float | None = 0.4,
+    bise_pressure_gradient_hpa: float | None = 2.0,
+) -> CandidateWindow:
+    return CandidateWindow(
         alert_name="zurich_bise",
         start=datetime(2026, 4, 29, 11, 0),
         end=datetime(2026, 4, 29, 13, 0),
@@ -21,13 +25,13 @@ def test_console_channel_renders_precipitation() -> None:
         avg_wind_speed_kmh=10.5,
         max_wind_speed_kmh=12.0,
         avg_direction_deg=60.0,
-        avg_precipitation_mm_per_hour=0.4,
+        avg_precipitation_mm_per_hour=avg_precipitation_mm_per_hour,
         max_precipitation_mm_per_hour=0.7,
-        bise_pressure_gradient_hpa=2.0,
+        bise_pressure_gradient_hpa=bise_pressure_gradient_hpa,
         models=["icon_d2", "meteoswiss_icon_ch2"],
         dry_filter_applied=False,
-        score=4,
-        classification="candidate",
+        score=score,
+        classification=classification,
         hours=[
             WindowHour(
                 time=datetime(2026, 4, 29, 11, 0),
@@ -44,7 +48,13 @@ def test_console_channel_renders_precipitation() -> None:
         ],
     )
 
-    channel.deliver("zurich_bise", [window])
+
+def test_console_channel_renders_precipitation() -> None:
+    buffer = StringIO()
+    console = Console(file=buffer, force_terminal=False, color_system=None, width=120)
+    channel = ConsoleChannel(console=console)
+
+    asyncio.run(channel.deliver("zurich_bise", [_make_window()]))
 
     output = buffer.getvalue()
     assert "Precipitation: avg 0.4 mm/h, max 0.7 mm/h" in output
