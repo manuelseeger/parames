@@ -1,0 +1,7 @@
+[project]
+name = "parames"
+version = "0.1.0"
+description = "Custom paragliding forecasting tool"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
