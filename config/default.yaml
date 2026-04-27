@@ -17,9 +17,10 @@ alerts:
     models:
       - meteoswiss_icon_ch2
       - icon_d2
+      - ecmwf_ifs
     wind:
-      min_speed_kmh: 8.0
-      strong_speed_kmh: 10.0
+      min_speed_kmh: 10.0
+      strong_speed_kmh: 12.0
       direction_min_deg: 30
       direction_max_deg: 100
       min_consecutive_hours: 2
@@ -27,7 +28,7 @@ alerts:
       start_hour: 8
       end_hour: 20
     dry:
-      enabled: false
+      enabled: true
       max_precipitation_mm_per_hour: 0.2
     bise:
       enabled: true

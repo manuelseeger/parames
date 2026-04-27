@@ -11,6 +11,7 @@ class WindowHour(BaseModel):
     time: datetime
     avg_wind_speed_kmh: float
     avg_direction_deg: float
+    avg_precipitation_mm_per_hour: float | None = None
     in_window: bool = True  # False for ±context hours outside the alert window
 
 
@@ -30,6 +31,8 @@ class CandidateWindow(BaseModel):
     avg_wind_speed_kmh: float
     max_wind_speed_kmh: float
     avg_direction_deg: float
+    avg_precipitation_mm_per_hour: float | None = None
+    max_precipitation_mm_per_hour: float | None = None
     bise_pressure_gradient_hpa: float | None = None
     models: list[str]
     dry_filter_applied: bool

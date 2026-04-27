@@ -56,6 +56,25 @@ def test_evaluate_hour_candidate_checks_filters(default_config, fixed_now) -> No
     )
 
 
+def test_evaluate_hour_candidate_does_not_reject_precipitation(default_config, fixed_now) -> None:
+    profile = default_config.alerts[0].model_copy(
+        update={"dry": {"enabled": True, "max_precipitation_mm_per_hour": 0.0}}
+    )
+    hour = HourForecast(
+        time=fixed_now.replace(hour=12),
+        wind_speed=9.0,
+        wind_direction=50.0,
+        precipitation=2.5,
+    )
+
+    assert evaluate_hour_candidate(
+        hour,
+        wind=profile.wind,
+        time_window=profile.time_window,
+        dry=profile.dry,
+    )
+
+
 def test_models_agree_rejects_large_delta(default_config, fixed_now) -> None:
     agreement = default_config.alerts[0].model_agreement
     assert agreement is not None
@@ -73,7 +92,7 @@ def test_build_candidate_windows_filters_short_runs(default_config, fixed_now) -
             max_wind_speed_kmh=12.0,
             avg_direction_deg=60.0,
             models=("icon_ch2", "icon_d2"),
-            precipitation_ok=True,
+            avg_precipitation_mm_per_hour=0.0,
             bise_gradient_hpa=2.0,
         ),
         EvaluatedHour(
@@ -82,7 +101,7 @@ def test_build_candidate_windows_filters_short_runs(default_config, fixed_now) -
             max_wind_speed_kmh=13.0,
             avg_direction_deg=70.0,
             models=("icon_ch2", "icon_d2"),
-            precipitation_ok=True,
+            avg_precipitation_mm_per_hour=0.1,
             bise_gradient_hpa=2.0,
         ),
         EvaluatedHour(
@@ -91,7 +110,7 @@ def test_build_candidate_windows_filters_short_runs(default_config, fixed_now) -
             max_wind_speed_kmh=14.0,
             avg_direction_deg=80.0,
             models=("icon_ch2", "icon_d2"),
-            precipitation_ok=True,
+            avg_precipitation_mm_per_hour=0.2,
             bise_gradient_hpa=2.0,
         ),
     ]
@@ -112,7 +131,7 @@ def test_score_window_classification_boundaries(default_config, fixed_now) -> No
             max_wind_speed_kmh=11.0,
             avg_direction_deg=60.0,
             models=("icon_ch2", "icon_d2"),
-            precipitation_ok=True,
+            avg_precipitation_mm_per_hour=0.1,
             bise_gradient_hpa=None,
         )
         for index in range(4)
@@ -121,6 +140,7 @@ def test_score_window_classification_boundaries(default_config, fixed_now) -> No
     window = score_window(profile, hours)
     assert window.score == 4
     assert window.classification == "candidate"
+
 
 
 def test_evaluate_positive_snapshot_replays_expected_window(default_config) -> None:

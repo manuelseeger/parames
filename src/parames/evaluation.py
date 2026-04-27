@@ -18,7 +18,7 @@ class EvaluatedHour:
     max_wind_speed_kmh: float
     avg_direction_deg: float
     models: tuple[str, ...]
-    precipitation_ok: bool
+    avg_precipitation_mm_per_hour: float | None
     bise_gradient_hpa: float | None
 
 
@@ -60,11 +60,6 @@ def evaluate_hour_candidate(
         hour.wind_direction, wind.direction_min_deg, wind.direction_max_deg
     ):
         return False
-    if dry is not None and dry.enabled:
-        if hour.precipitation is None:
-            return False
-        if hour.precipitation > dry.max_precipitation_mm_per_hour:
-            return False
     return True
 
 
@@ -175,12 +170,9 @@ def _evaluate_timestamp(
         west_pressures=west_pressures,
         east_pressures=east_pressures,
     )
-    precipitation_ok = not (profile.dry and profile.dry.enabled) or all(
-        hour.precipitation is not None and hour.precipitation <= profile.dry.max_precipitation_mm_per_hour
-        for hour in matching.values()
-    )
     directions = [hour.wind_direction for hour in matching.values() if hour.wind_direction is not None]
     speeds = [hour.wind_speed for hour in matching.values() if hour.wind_speed is not None]
+    precipitations = [hour.precipitation for hour in matching.values() if hour.precipitation is not None]
     if not directions or not speeds:
         return None
     gradient_average = sum(gradients.values()) / len(gradients) if gradients else None
@@ -190,7 +182,7 @@ def _evaluate_timestamp(
         max_wind_speed_kmh=max(speeds),
         avg_direction_deg=vector_average_direction(directions),
         models=tuple(sorted(matching)),
-        precipitation_ok=precipitation_ok,
+        avg_precipitation_mm_per_hour=(sum(precipitations) / len(precipitations)) if precipitations else None,
         bise_gradient_hpa=gradient_average,
     )
 
@@ -254,6 +246,11 @@ def score_window(profile: AlertProfileConfig, hours: list[EvaluatedHour]) -> Can
     avg_speed = sum(hour.avg_wind_speed_kmh for hour in hours) / len(hours)
     max_speed = max(hour.max_wind_speed_kmh for hour in hours)
     avg_direction = vector_average_direction([hour.avg_direction_deg for hour in hours])
+    precipitation_values = [hour.avg_precipitation_mm_per_hour for hour in hours if hour.avg_precipitation_mm_per_hour is not None]
+    avg_precipitation = (
+        sum(precipitation_values) / len(precipitation_values) if len(precipitation_values) == len(hours) else None
+    )
+    max_precipitation = max(precipitation_values) if precipitation_values else None
     gradient_values = [hour.bise_gradient_hpa for hour in hours if hour.bise_gradient_hpa is not None]
     gradient = sum(gradient_values) / len(gradient_values) if len(gradient_values) == len(hours) else None
 
@@ -274,9 +271,6 @@ def score_window(profile: AlertProfileConfig, hours: list[EvaluatedHour]) -> Can
         elif gradient >= profile.bise.east_minus_west_pressure_hpa_min:
             score += 1
 
-    if profile.dry and profile.dry.enabled and all(hour.precipitation_ok for hour in hours):
-        score += 1
-
     if score >= 5:
         classification = "strong"
     elif score >= 3:
@@ -290,6 +284,7 @@ def score_window(profile: AlertProfileConfig, hours: list[EvaluatedHour]) -> Can
             time=hour.time,
             avg_wind_speed_kmh=hour.avg_wind_speed_kmh,
             avg_direction_deg=hour.avg_direction_deg,
+            avg_precipitation_mm_per_hour=hour.avg_precipitation_mm_per_hour,
         )
         for hour in hours
     ]
@@ -301,9 +296,11 @@ def score_window(profile: AlertProfileConfig, hours: list[EvaluatedHour]) -> Can
         avg_wind_speed_kmh=avg_speed,
         max_wind_speed_kmh=max_speed,
         avg_direction_deg=avg_direction,
+        avg_precipitation_mm_per_hour=avg_precipitation,
+        max_precipitation_mm_per_hour=max_precipitation,
         bise_pressure_gradient_hpa=gradient,
         models=models,
-        dry_filter_applied=bool(profile.dry and profile.dry.enabled),
+        dry_filter_applied=False,
         score=score,
         classification=classification,
         hours=window_hours,
@@ -313,18 +310,24 @@ def score_window(profile: AlertProfileConfig, hours: list[EvaluatedHour]) -> Can
 def _avg_hour_from_forecasts(
     timestamp: datetime,
     model_forecasts: dict[str, dict[datetime, HourForecast]],
-) -> tuple[float, float] | None:
-    """Return (avg_speed_kmh, avg_direction_deg) across models for a timestamp, or None."""
+) -> tuple[float, float, float | None] | None:
+    """Return averages for a timestamp across models, or None when wind data is unavailable."""
     speeds: list[float] = []
     directions: list[float] = []
+    precipitations: list[float] = []
     for forecasts in model_forecasts.values():
         hour = forecasts.get(timestamp)
-        if hour is not None and hour.wind_speed is not None and hour.wind_direction is not None:
+        if hour is None:
+            continue
+        if hour.wind_speed is not None and hour.wind_direction is not None:
             speeds.append(hour.wind_speed)
             directions.append(hour.wind_direction)
+        if hour.precipitation is not None:
+            precipitations.append(hour.precipitation)
     if not speeds:
         return None
-    return sum(speeds) / len(speeds), vector_average_direction(directions)
+    avg_precipitation = sum(precipitations) / len(precipitations) if precipitations else None
+    return sum(speeds) / len(speeds), vector_average_direction(directions), avg_precipitation
 
 
 def _attach_context_hours(
@@ -343,7 +346,13 @@ def _attach_context_hours(
             result = _avg_hour_from_forecasts(t, model_forecasts)
             if result is not None:
                 context_before.append(
-                    WindowHour(time=t, avg_wind_speed_kmh=result[0], avg_direction_deg=result[1], in_window=False)
+                    WindowHour(
+                        time=t,
+                        avg_wind_speed_kmh=result[0],
+                        avg_direction_deg=result[1],
+                        avg_precipitation_mm_per_hour=result[2],
+                        in_window=False,
+                    )
                 )
 
         context_after = []
@@ -351,7 +360,13 @@ def _attach_context_hours(
             result = _avg_hour_from_forecasts(t, model_forecasts)
             if result is not None:
                 context_after.append(
-                    WindowHour(time=t, avg_wind_speed_kmh=result[0], avg_direction_deg=result[1], in_window=False)
+                    WindowHour(
+                        time=t,
+                        avg_wind_speed_kmh=result[0],
+                        avg_direction_deg=result[1],
+                        avg_precipitation_mm_per_hour=result[2],
+                        in_window=False,
+                    )
                 )
 
         window.hours = context_before + window.hours + context_after

@@ -66,6 +66,7 @@ def _render_horizontal_charts(console: Console, hours: list[WindowHour]) -> None
     speed_row = Text("  ")
     arrow_row = Text("  ")
     label_row = Text("  ")
+    precip_row = Text("  ")
 
     for h in hours:
         col = _COL_W
@@ -79,16 +80,16 @@ def _render_horizontal_charts(console: Console, hours: list[WindowHour]) -> None
         speed_row.append(f"{h.avg_wind_speed_kmh:.0f}".ljust(col), style=sty)
         arrow_row.append(arrow.ljust(col), style=sty)
         label_row.append(label.ljust(col), style=dir_sty)
+        precipitation = "-" if h.avg_precipitation_mm_per_hour is None else f"{h.avg_precipitation_mm_per_hour:.1f}"
+        precip_row.append(precipitation.ljust(col), style=("bold blue" if h.in_window else "dim"))
 
-    console.print(
-        "  [bold]💨 Speed  🧭 Direction[/bold]  "
-        
-    )
+    console.print("  [bold]💨 Speed  🧭 Direction  💧 Precip (mm/h)[/bold]")
     console.print(time_row)
     console.print(bar_row)
     console.print(speed_row)
     console.print(arrow_row)
     console.print(label_row)
+    console.print(precip_row)
 
 
 class DeliveryChannel(Protocol):
@@ -129,7 +130,12 @@ class ConsoleChannel:
                     f"  🌡  Bise gradient: +{window.bise_pressure_gradient_hpa:.1f} hPa east-west"
                 )
             self._console.print(
-                f"  💧 Dry filter: {'✅ enabled' if window.dry_filter_applied else '⛔ disabled'}"
+                "  💧 Precipitation: "
+                + (
+                    "unavailable"
+                    if window.avg_precipitation_mm_per_hour is None
+                    else f"avg {window.avg_precipitation_mm_per_hour:.1f} mm/h, max {window.max_precipitation_mm_per_hour:.1f} mm/h"
+                )
             )
             if window.hours:
                 self._console.print()
