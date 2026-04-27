@@ -5,6 +5,15 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
+class WindowHour(BaseModel):
+    """Per-hour data point within a CandidateWindow, used for charting."""
+
+    time: datetime
+    avg_wind_speed_kmh: float
+    avg_direction_deg: float
+    in_window: bool = True  # False for ±context hours outside the alert window
+
+
 class HourForecast(BaseModel):
     time: datetime
     wind_speed: float | None = None
@@ -26,3 +35,4 @@ class CandidateWindow(BaseModel):
     dry_filter_applied: bool
     score: int
     classification: str
+    hours: list[WindowHour] = []

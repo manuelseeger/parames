@@ -7,7 +7,7 @@ from itertools import combinations
 from zoneinfo import ZoneInfo
 
 from parames.config import AlertProfileConfig, DryConfig, ModelAgreementConfig, TimeWindowConfig, WindConfig
-from parames.domain import CandidateWindow, HourForecast
+from parames.domain import CandidateWindow, HourForecast, WindowHour
 from parames.forecast import OpenMeteoForecastClient, ZURICH_TIMEZONE
 
 
@@ -140,7 +140,9 @@ def _evaluate_with_client(
             accepted_hours.append(evaluated)
 
     windows = build_candidate_windows(profile, accepted_hours)
-    return [window for window in windows if window.score >= 3]
+    scored = [window for window in windows if window.score >= 3]
+    _attach_context_hours(scored, model_forecasts)
+    return scored
 
 
 def _evaluate_timestamp(
@@ -283,6 +285,14 @@ def score_window(profile: AlertProfileConfig, hours: list[EvaluatedHour]) -> Can
         classification = "weak"
 
     models = sorted({model for hour in hours for model in hour.models})
+    window_hours = [
+        WindowHour(
+            time=hour.time,
+            avg_wind_speed_kmh=hour.avg_wind_speed_kmh,
+            avg_direction_deg=hour.avg_direction_deg,
+        )
+        for hour in hours
+    ]
     return CandidateWindow(
         alert_name=profile.name,
         start=hours[0].time,
@@ -296,4 +306,52 @@ def score_window(profile: AlertProfileConfig, hours: list[EvaluatedHour]) -> Can
         dry_filter_applied=bool(profile.dry and profile.dry.enabled),
         score=score,
         classification=classification,
+        hours=window_hours,
     )
+
+
+def _avg_hour_from_forecasts(
+    timestamp: datetime,
+    model_forecasts: dict[str, dict[datetime, HourForecast]],
+) -> tuple[float, float] | None:
+    """Return (avg_speed_kmh, avg_direction_deg) across models for a timestamp, or None."""
+    speeds: list[float] = []
+    directions: list[float] = []
+    for forecasts in model_forecasts.values():
+        hour = forecasts.get(timestamp)
+        if hour is not None and hour.wind_speed is not None and hour.wind_direction is not None:
+            speeds.append(hour.wind_speed)
+            directions.append(hour.wind_direction)
+    if not speeds:
+        return None
+    return sum(speeds) / len(speeds), vector_average_direction(directions)
+
+
+def _attach_context_hours(
+    windows: list[CandidateWindow],
+    model_forecasts: dict[str, dict[datetime, HourForecast]],
+    context_n: int = 2,
+) -> None:
+    """Prepend and append context hours (outside the alert window) to each window's hours list."""
+    for window in windows:
+        pre_times = [window.start - timedelta(hours=i) for i in range(context_n, 0, -1)]
+        # window.end is already hours[-1].time + 1h (exclusive), so post starts at window.end
+        post_times = [window.end + timedelta(hours=i) for i in range(context_n)]
+
+        context_before = []
+        for t in pre_times:
+            result = _avg_hour_from_forecasts(t, model_forecasts)
+            if result is not None:
+                context_before.append(
+                    WindowHour(time=t, avg_wind_speed_kmh=result[0], avg_direction_deg=result[1], in_window=False)
+                )
+
+        context_after = []
+        for t in post_times:
+            result = _avg_hour_from_forecasts(t, model_forecasts)
+            if result is not None:
+                context_after.append(
+                    WindowHour(time=t, avg_wind_speed_kmh=result[0], avg_direction_deg=result[1], in_window=False)
+                )
+
+        window.hours = context_before + window.hours + context_after
