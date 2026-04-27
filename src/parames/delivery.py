@@ -82,7 +82,7 @@ def _render_horizontal_charts(console: Console, hours: list[WindowHour]) -> None
 
     console.print(
         "  [bold]💨 Speed  🧭 Direction[/bold]  "
-        "[dim](bright = alert window)[/dim]"
+        
     )
     console.print(time_row)
     console.print(bar_row)
