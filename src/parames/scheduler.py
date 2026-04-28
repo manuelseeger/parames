@@ -4,7 +4,7 @@ import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from parames.cli import _run
-from parames.config import RuntimeSettings, load_app_config
+from parames.config import RuntimeSettings
 
 logger = logging.getLogger(__name__)
 
@@ -16,26 +16,30 @@ logging.basicConfig(
 def _default_config_path():
     return RuntimeSettings().config_path
 
+
+
 async def main() -> None:
-    config_path  = _default_config_path()
-    app_config = load_app_config(config_path)
+    settings = RuntimeSettings()
 
     scheduler = AsyncIOScheduler(timezone="Europe/Zurich")
 
-    scheduler.add_job(
-        _run,
-        "cron",
-        hour=app_config.scheduler.cron_hour,
-        #minute="*/1",
-        id="main_job",
-        replace_existing=True,
-        kwargs={"config_path": _default_config_path()},
-        max_instances=1,
-        coalesce=True,
-    )
+    # Build job trigger - use minute if configured, otherwise just hour
+    job_kwargs = {
+        "id": "main_job",
+        "replace_existing": True,
+        "kwargs": {"config_path": _default_config_path()},
+        "max_instances": 1,
+        "coalesce": True,
+    }
+
+    if settings.scheduler.cron_minute:
+        scheduler.add_job(_run, "cron", minute=settings.scheduler.cron_minute, **job_kwargs)
+    else:
+        scheduler.add_job(_run, "cron", hour=settings.scheduler.cron_hour, **job_kwargs)
 
 
     logger.info("Starting scheduler with config path: %s", _default_config_path())
+    logger.info("Scheduler will run with cron_hour=%s and cron_minute=%s", settings.scheduler.cron_hour, settings.scheduler.cron_minute)
     scheduler.start()
 
     try:
