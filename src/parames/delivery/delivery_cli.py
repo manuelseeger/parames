@@ -54,15 +54,11 @@ def _render_horizontal_charts(console: Console, hours: list[WindowHour]) -> None
 
 
 class DeliveryChannel(Protocol):
-    dedupe: bool
-
     async def deliver(self, alert_name: str, windows: Sequence[CandidateWindow]) -> None:
         ...
 
 
 class ConsoleChannel:
-    dedupe: bool = False
-
     def __init__(self, console: Console | None = None) -> None:
         self._console = console or Console()
 

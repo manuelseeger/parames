@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+logger = logging.getLogger(__name__)
 
 class LocationConfig(BaseModel):
     name: str
@@ -60,11 +62,13 @@ class BiseConfig(BaseModel):
 
 class DeliveryChannelConfig(BaseModel):
     type: str
+    suppress_duplicates: bool | None = None
     model_config = ConfigDict(extra="allow")
 
 
 class SchedulerConfig(BaseModel):
     cron_hour: str = "*/6"
+    cron_minute: str | None = None
 
 class AlertProfileConfig(BaseModel):
     name: str
@@ -79,6 +83,7 @@ class AlertProfileConfig(BaseModel):
     dry: DryConfig | None = None
     bise: BiseConfig | None = None
     delivery: list[str] = Field(min_length=1)
+    suppress_duplicates: bool | None = None
 
     @model_validator(mode="after")
     def validate_model_count(self) -> "AlertProfileConfig":
@@ -90,7 +95,7 @@ class AlertProfileConfig(BaseModel):
 
 class AppConfig(BaseModel):
     defaults: DefaultsConfig = Field(default_factory=DefaultsConfig)
-    scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
+    
     alerts: list[AlertProfileConfig]
     delivery_channels: dict[str, DeliveryChannelConfig]
 
@@ -109,17 +114,36 @@ class AppConfig(BaseModel):
         self.alerts = resolved_alerts
         return self
 
+    @model_validator(mode="after")
+    def validate_config(self) -> "AppConfig":
+        # Check for telegram token if any delivery channel is telegram
+        for name, channel in self.delivery_channels.items():
+            if channel.type == "telegram":
+                settings = RuntimeSettings()
+                if settings.telegram_bot_token is None:
+                    logger.error(f"Telegram bot token not set for channel '{name}'. Set PARAMES_TELEGRAM_BOT_TOKEN env var.")
+                break
+
+        # Warn if no alerts configured
+        if not self.alerts:
+            logger.warning("No alerts configured. Add alerts to your config file.")
+
+        return self
+
 
 class RuntimeSettings(BaseSettings):
     config_path: Path = Path("config/default.yaml")
     telegram_bot_token: SecretStr | None = None
     mongo_uri: str = "mongodb://localhost:27017/parames"
+    scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
 
     model_config = SettingsConfigDict(
         env_prefix="PARAMES_",
         env_file=".env",
         extra="ignore",
+        env_nested_delimiter="__",
     )
+
 
 
 def load_app_config(path: Path) -> AppConfig:

@@ -40,6 +40,18 @@ def _build_channels(app_config: AppConfig, settings: RuntimeSettings) -> dict[st
     return channels
 
 
+def _resolve_suppress(
+    alert_suppress: bool | None,
+    channel_suppress: bool | None,
+    channel_type: str,
+) -> bool:
+    if alert_suppress is not None:
+        return alert_suppress
+    if channel_suppress is not None:
+        return channel_suppress
+    return channel_type != "console"
+
+
 async def _deliver_window(
     *,
     profile_name: str,
@@ -48,6 +60,7 @@ async def _deliver_window(
     channel_names: list[str],
     channels: dict[str, DeliveryChannel],
     channel_types: dict[str, str],
+    channel_suppress: dict[str, bool],
     repo: AlertRepository,
     run_id,
 ) -> tuple[int, int]:
@@ -58,8 +71,7 @@ async def _deliver_window(
         channel = channels.get(channel_name)
         if channel is None:
             raise click.ClickException(f"Unsupported delivery channel: {channel_name!r}")
-        if not channel.dedupe:
-            # Channels like console always fire and aren't recorded — they're transient output.
+        if not channel_suppress[channel_name]:
             await channel.deliver(profile_name, [window])
             continue
         if await repo.was_delivered(alert_doc.id, channel_name):
@@ -109,6 +121,14 @@ async def _run(config_path: Path) -> None:
     try:
         with OpenMeteoForecastClient() as client:
             for profile in app_config.alerts:
+                profile_suppress = {
+                    ch: _resolve_suppress(
+                        profile.suppress_duplicates,
+                        app_config.delivery_channels[ch].suppress_duplicates,
+                        app_config.delivery_channels[ch].type,
+                    )
+                    for ch in profile.delivery
+                }
                 profile_windows = evaluate(profile, client=client)
                 windows_found += len(profile_windows)
                 for window in profile_windows:
@@ -121,6 +141,7 @@ async def _run(config_path: Path) -> None:
                         channel_names=profile.delivery,
                         channels=channels,
                         channel_types=channel_types,
+                        channel_suppress=profile_suppress,
                         repo=repo,
                         run_id=run.id,
                     )
