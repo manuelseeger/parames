@@ -7,6 +7,7 @@ RUN uv sync --no-dev --locked
 
 COPY src/ src/
 COPY config/ config/
+COPY webapp/ webapp/
 
 ENV PATH="/app/.venv/bin:$PATH"
 
