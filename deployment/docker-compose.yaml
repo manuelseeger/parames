@@ -12,8 +12,9 @@ services:
       PARAMES_MONGO_URI: mongodb://mongo:27017/parames
       PARAMES_SCHEDULER__CRON_MINUTE: "*/1"
       PYTHONUNBUFFERED: "1"
-    volumes:
-      - ../config:/app/config:ro
+    # Override config mount for custom config (optional)
+    # volumes:
+    #   - /path/to/prod/config:/app/config:ro
     depends_on:
       mongo:
         condition: service_healthy

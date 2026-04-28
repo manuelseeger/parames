@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from aiogram import Bot
 from aiogram.enums import ParseMode
 
+
 from parames.delivery._charts import COL_W, compass, vbar
 from parames.domain import CandidateWindow, WindowHour
 

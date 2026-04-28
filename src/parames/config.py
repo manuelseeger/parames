@@ -6,6 +6,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from aiogram.utils.token import validate_token as validate_telegram_token
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +121,7 @@ class AppConfig(BaseModel):
         for name, channel in self.delivery_channels.items():
             if channel.type == "telegram":
                 settings = RuntimeSettings()
-                if settings.telegram_bot_token is None:
+                if not validate_telegram_token(settings.telegram_bot_token.get_secret_value() if settings.telegram_bot_token else ""):
                     logger.error(f"Telegram bot token not set for channel '{name}'. Set PARAMES_TELEGRAM_BOT_TOKEN env var.")
                 break
 
