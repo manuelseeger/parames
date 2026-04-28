@@ -1,24 +1,60 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import ClassVar, Literal
 
 from pyodmongo import DbModel, Field, Id
 from pymongo import ASCENDING, DESCENDING, IndexModel
 
+from parames.common import LocationConfig
+from parames.config import (
+    DryConfig,
+    ModelAgreementConfig,
+    TimeWindowConfig,
+    WindConfig,
+)
 from parames.domain import CandidateWindow
+from parames.plugins.schemas import PluginConfig
 
 RunStatus = Literal["running", "completed", "failed"]
 DeliveryStatus = Literal["sent", "failed", "skipped"]
 
 
-class RunDoc(DbModel):
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class AlertDefinition(DbModel):
+    name: str = Field(index=True)
+    description: str | None = None
+    enabled: bool = True
+    location: LocationConfig
+    models: list[str]
+    forecast_hours: int | None = None
+    wind_level_m: int | None = None
+    model_agreement: ModelAgreementConfig | None = None
+    wind: WindConfig
+    time_window: TimeWindowConfig | None = None
+    dry: DryConfig | None = None
+    plugins: list[PluginConfig] = []
+    delivery: list[str]
+    suppress_duplicates: bool | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+    _collection: ClassVar = "alert_definitions"
+    _indexes: ClassVar = [
+        IndexModel([("name", ASCENDING)], name="alert_definition_name_unique", unique=True),
+    ]
+
+
+class Run(DbModel):
     started_at: datetime
     finished_at: datetime | None = None
     status: RunStatus = "running"
     error: str | None = None
     config_path: str
-    alert_names: list[str] = []
+    alert_definition_ids: list[Id] = []
     windows_found: int = 0
     deliveries_attempted: int = 0
     deliveries_suppressed: int = 0
@@ -29,7 +65,8 @@ class RunDoc(DbModel):
     ]
 
 
-class AlertDoc(DbModel):
+class Detection(DbModel):
+    alert_definition_id: Id
     alert_name: str = Field(index=True)
     local_date: str
     start: datetime
@@ -41,17 +78,18 @@ class AlertDoc(DbModel):
     seen_count: int = 1
     window: CandidateWindow
 
-    _collection: ClassVar = "alerts"
+    _collection: ClassVar = "detections"
     _indexes: ClassVar = [
         IndexModel(
             [("alert_name", ASCENDING), ("local_date", ASCENDING), ("start", ASCENDING)],
             name="alert_local_date_start",
         ),
+        IndexModel([("alert_definition_id", ASCENDING)], name="alert_definition_id"),
     ]
 
 
-class DeliveryDoc(DbModel):
-    alert_id: Id
+class Delivery(DbModel):
+    detection_id: Id
     run_id: Id
     channel_name: str
     channel_type: str
@@ -63,7 +101,7 @@ class DeliveryDoc(DbModel):
     _collection: ClassVar = "deliveries"
     _indexes: ClassVar = [
         IndexModel(
-            [("alert_id", ASCENDING), ("channel_name", ASCENDING), ("status", ASCENDING)],
-            name="alert_channel_status",
+            [("detection_id", ASCENDING), ("channel_name", ASCENDING), ("status", ASCENDING)],
+            name="detection_channel_status",
         ),
     ]

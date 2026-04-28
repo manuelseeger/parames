@@ -11,7 +11,7 @@ def test_default_config_parses() -> None:
     config = load_app_config(Path("config/default.yaml"))
     alert = config.alerts[0]
     assert isinstance(config, AppConfig)
-    assert alert.forecast_hours == 48
+    assert alert.forecast_hours == 72
     assert alert.wind_level_m == 10
     assert alert.model_agreement is not None
 

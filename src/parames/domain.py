@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pyodmongo import MainBaseModel
 
@@ -33,9 +34,9 @@ class CandidateWindow(MainBaseModel):
     avg_direction_deg: float
     avg_precipitation_mm_per_hour: float | None = None
     max_precipitation_mm_per_hour: float | None = None
-    bise_pressure_gradient_hpa: float | None = None
     models: list[str]
     dry_filter_applied: bool
     score: int
     classification: str
     hours: list[WindowHour] = []
+    plugin_outputs: dict[str, dict[str, Any]] = {}

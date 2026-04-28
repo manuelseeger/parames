@@ -30,18 +30,19 @@ alerts:
     dry:
       enabled: true
       max_precipitation_mm_per_hour: 0.2
-    bise:
-      enabled: true
-      east_minus_west_pressure_hpa_min: 1.5
-      boost_if_bise: true
-      pressure_reference_west:
-        name: geneva
-        latitude: 46.204
-        longitude: 6.143
-      pressure_reference_east:
-        name: guettingen
-        latitude: 47.604
-        longitude: 9.287
+    plugins:
+      - type: bise
+        enabled: true
+        east_minus_west_pressure_hpa_min: 1.5
+        boost_if_bise: true
+        pressure_reference_west:
+          name: geneva
+          latitude: 46.204
+          longitude: 6.143
+        pressure_reference_east:
+          name: guettingen
+          latitude: 47.604
+          longitude: 9.287
     delivery:
       - console
       - telegram

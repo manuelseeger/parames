@@ -58,10 +58,11 @@ def _format_window(alert_name: str, window: CandidateWindow) -> str:
     )
     dir_line = f"🧭 avg {_md2(f'{window.avg_direction_deg:.0f}')}°"
 
-    if window.bise_pressure_gradient_hpa is None:
+    bise_gradient = window.plugin_outputs.get("bise", {}).get("gradient_hpa")
+    if bise_gradient is None:
         bise_line = "🌡 Bise gradient: unavailable"
     else:
-        bise_line = f"🌡 Bise gradient: \\+{_md2(f'{window.bise_pressure_gradient_hpa:.1f}')} hPa east\\-west"
+        bise_line = f"🌡 Bise gradient: \\+{_md2(f'{bise_gradient:.1f}')} hPa east\\-west"
 
     if window.avg_precipitation_mm_per_hour is None:
         precip_line = "💧 Precipitation: unavailable"

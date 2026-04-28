@@ -8,7 +8,14 @@ from pyodmongo import AsyncDbEngine
 
 from parames.domain import CandidateWindow
 from parames.forecast import ZURICH_TIMEZONE
-from parames.persistence.models import AlertDoc, DeliveryDoc, DeliveryStatus, RunDoc, RunStatus
+from parames.persistence.models import (
+    AlertDefinition,
+    Delivery,
+    DeliveryStatus,
+    Detection,
+    Run,
+    RunStatus,
+)
 
 
 def build_engine(mongo_uri: str) -> AsyncDbEngine:
@@ -22,7 +29,7 @@ def local_date_for_window(window: CandidateWindow) -> str:
 
 
 def is_same_event(prior: CandidateWindow, candidate: CandidateWindow) -> bool:
-    """The dedupe heuristic in one place — must mirror the Mongo query in find_matching_alert."""
+    """The dedupe heuristic in one place — must mirror the Mongo query in find_matching_detection."""
     if prior.alert_name != candidate.alert_name:
         return False
     if local_date_for_window(prior) != local_date_for_window(candidate):
@@ -38,19 +45,64 @@ class AlertRepository:
     def __init__(self, engine: AsyncDbEngine) -> None:
         self._engine = engine
 
-    async def start_run(self, *, config_path: str, alert_names: list[str]) -> RunDoc:
-        run = RunDoc(
+    # ------------- Alert definitions (CRUD) -------------
+
+    async def list_alert_definitions(self, *, enabled_only: bool = False) -> list[AlertDefinition]:
+        query = AlertDefinition.enabled == True if enabled_only else None  # noqa: E712
+        results = await self._engine.find_many(Model=AlertDefinition, query=query)
+        return list(results)
+
+    async def get_alert_definition(self, definition_id) -> AlertDefinition | None:
+        return await self._engine.find_one(
+            Model=AlertDefinition, query=AlertDefinition.id == definition_id
+        )
+
+    async def get_alert_definition_by_name(self, name: str) -> AlertDefinition | None:
+        return await self._engine.find_one(
+            Model=AlertDefinition, query=AlertDefinition.name == name
+        )
+
+    async def create_alert_definition(self, definition: AlertDefinition) -> AlertDefinition:
+        definition.created_at = _utcnow()
+        definition.updated_at = definition.created_at
+        await self._engine.save(definition)
+        return definition
+
+    async def update_alert_definition(self, definition: AlertDefinition) -> AlertDefinition:
+        definition.updated_at = _utcnow()
+        await self._engine.save(definition)
+        return definition
+
+    async def delete_alert_definition(self, definition_id) -> bool:
+        response = await self._engine.delete(
+            Model=AlertDefinition, query=AlertDefinition.id == definition_id
+        )
+        return getattr(response, "deleted_count", 0) > 0
+
+    async def upsert_alert_definition(self, definition: AlertDefinition) -> AlertDefinition:
+        """Idempotent create-or-replace by `name`. Used by the seed command."""
+        existing = await self.get_alert_definition_by_name(definition.name)
+        if existing is None:
+            return await self.create_alert_definition(definition)
+        definition.id = existing.id
+        definition.created_at = existing.created_at
+        return await self.update_alert_definition(definition)
+
+    # ------------- Runs -------------
+
+    async def start_run(self, *, config_path: str, alert_definition_ids: list) -> Run:
+        run = Run(
             started_at=_utcnow(),
             status="running",
             config_path=config_path,
-            alert_names=alert_names,
+            alert_definition_ids=alert_definition_ids,
         )
         await self._engine.save(run)
         return run
 
     async def finish_run(
         self,
-        run: RunDoc,
+        run: Run,
         *,
         status: RunStatus,
         error: str | None = None,
@@ -66,26 +118,37 @@ class AlertRepository:
         run.deliveries_suppressed = deliveries_suppressed
         await self._engine.save(run)
 
-    async def find_matching_alert(
-        self, alert_name: str, window: CandidateWindow
-    ) -> AlertDoc | None:
-        query = (
-            (AlertDoc.alert_name == alert_name)
-            & (AlertDoc.local_date == local_date_for_window(window))
-            & (AlertDoc.start < window.end)
-            & (AlertDoc.end > window.start)
-        )
-        return await self._engine.find_one(Model=AlertDoc, query=query)
+    async def list_runs(self, *, limit: int = 50) -> list[Run]:
+        results = await self._engine.find_many(Model=Run, raw_sort={"started_at": -1})
+        return list(results)[:limit]
 
-    async def upsert_alert(
+    async def get_run(self, run_id) -> Run | None:
+        return await self._engine.find_one(Model=Run, query=Run.id == run_id)
+
+    # ------------- Detections (formerly alerts) -------------
+
+    async def find_matching_detection(
+        self, alert_name: str, window: CandidateWindow
+    ) -> Detection | None:
+        query = (
+            (Detection.alert_name == alert_name)
+            & (Detection.local_date == local_date_for_window(window))
+            & (Detection.start < window.end)
+            & (Detection.end > window.start)
+        )
+        return await self._engine.find_one(Model=Detection, query=query)
+
+    async def upsert_detection(
         self,
         window: CandidateWindow,
         *,
+        alert_definition_id,
         run_id,
-        existing: AlertDoc | None,
-    ) -> AlertDoc:
+        existing: Detection | None,
+    ) -> Detection:
         if existing is None:
-            doc = AlertDoc(
+            doc = Detection(
+                alert_definition_id=alert_definition_id,
                 alert_name=window.alert_name,
                 local_date=local_date_for_window(window),
                 start=window.start,
@@ -109,28 +172,37 @@ class AlertRepository:
         await self._engine.save(doc)
         return doc
 
-    async def was_delivered(self, alert_id, channel_name: str) -> bool:
+    async def list_detections(self, *, limit: int = 100) -> list[Detection]:
+        results = await self._engine.find_many(Model=Detection, raw_sort={"start": -1})
+        return list(results)[:limit]
+
+    async def get_detection(self, detection_id) -> Detection | None:
+        return await self._engine.find_one(Model=Detection, query=Detection.id == detection_id)
+
+    # ------------- Deliveries -------------
+
+    async def was_delivered(self, detection_id, channel_name: str) -> bool:
         query = (
-            (DeliveryDoc.alert_id == alert_id)
-            & (DeliveryDoc.channel_name == channel_name)
-            & (DeliveryDoc.status == "sent")
+            (Delivery.detection_id == detection_id)
+            & (Delivery.channel_name == channel_name)
+            & (Delivery.status == "sent")
         )
-        existing = await self._engine.find_one(Model=DeliveryDoc, query=query)
+        existing = await self._engine.find_one(Model=Delivery, query=query)
         return existing is not None
 
     async def record_delivery(
         self,
         *,
-        alert_id,
+        detection_id,
         run_id,
         channel_name: str,
         channel_type: str,
         status: DeliveryStatus,
         error: str | None = None,
         external_ref: str | None = None,
-    ) -> DeliveryDoc:
-        delivery = DeliveryDoc(
-            alert_id=alert_id,
+    ) -> Delivery:
+        delivery = Delivery(
+            detection_id=detection_id,
             run_id=run_id,
             channel_name=channel_name,
             channel_type=channel_type,
@@ -141,3 +213,10 @@ class AlertRepository:
         )
         await self._engine.save(delivery)
         return delivery
+
+    async def list_deliveries(self, *, limit: int = 100) -> list[Delivery]:
+        results = await self._engine.find_many(Model=Delivery, raw_sort={"sent_at": -1})
+        return list(results)[:limit]
+
+    async def get_delivery(self, delivery_id) -> Delivery | None:
+        return await self._engine.find_one(Model=Delivery, query=Delivery.id == delivery_id)

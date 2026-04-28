@@ -15,7 +15,7 @@ def _make_window(
     score: int = 4,
     classification: str = "candidate",
     avg_precipitation_mm_per_hour: float | None = 0.4,
-    bise_pressure_gradient_hpa: float | None = 2.0,
+    bise_gradient_hpa: float | None = 2.0,
 ) -> CandidateWindow:
     return CandidateWindow(
         alert_name="zurich_bise",
@@ -27,7 +27,6 @@ def _make_window(
         avg_direction_deg=60.0,
         avg_precipitation_mm_per_hour=avg_precipitation_mm_per_hour,
         max_precipitation_mm_per_hour=0.7,
-        bise_pressure_gradient_hpa=bise_pressure_gradient_hpa,
         models=["icon_d2", "meteoswiss_icon_ch2"],
         dry_filter_applied=False,
         score=score,
@@ -46,6 +45,7 @@ def _make_window(
                 avg_precipitation_mm_per_hour=0.7,
             ),
         ],
+        plugin_outputs={"bise": {"gradient_hpa": bise_gradient_hpa}} if bise_gradient_hpa is not None else {},
     )
 
 

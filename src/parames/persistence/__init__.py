@@ -1,4 +1,4 @@
-from parames.persistence.models import AlertDoc, DeliveryDoc, RunDoc
+from parames.persistence.models import AlertDefinition, Delivery, Detection, Run
 from parames.persistence.repository import (
     AlertRepository,
     build_engine,
@@ -7,10 +7,11 @@ from parames.persistence.repository import (
 )
 
 __all__ = [
-    "AlertDoc",
+    "AlertDefinition",
     "AlertRepository",
-    "DeliveryDoc",
-    "RunDoc",
+    "Delivery",
+    "Detection",
+    "Run",
     "build_engine",
     "is_same_event",
     "local_date_for_window",

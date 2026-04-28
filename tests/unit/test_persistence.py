@@ -29,7 +29,6 @@ def _window(
         avg_direction_deg=60.0,
         avg_precipitation_mm_per_hour=0.0,
         max_precipitation_mm_per_hour=0.0,
-        bise_pressure_gradient_hpa=2.0,
         models=["icon_d2"],
         dry_filter_applied=False,
         score=score,

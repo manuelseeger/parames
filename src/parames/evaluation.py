@@ -4,11 +4,13 @@ import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from itertools import combinations
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from parames.config import AlertProfileConfig, DryConfig, ModelAgreementConfig, TimeWindowConfig, WindConfig
 from parames.domain import CandidateWindow, HourForecast, WindowHour
 from parames.forecast import OpenMeteoForecastClient, ZURICH_TIMEZONE
+from parames.plugins import EvaluationPlugin, build_plugins
 
 
 @dataclass(frozen=True)
@@ -19,7 +21,6 @@ class EvaluatedHour:
     avg_direction_deg: float
     models: tuple[str, ...]
     avg_precipitation_mm_per_hour: float | None
-    bise_gradient_hpa: float | None
 
 
 def direction_in_range(direction: float, min_deg: float, max_deg: float) -> bool:
@@ -98,26 +99,17 @@ def _evaluate_with_client(
         "pressure_msl",
     ]
     model_forecasts: dict[str, dict[datetime, HourForecast]] = {}
-    west_pressures: dict[str, dict[datetime, HourForecast]] = {}
-    east_pressures: dict[str, dict[datetime, HourForecast]] = {}
-
     for model in profile.models:
         model_forecasts[model] = client.fetch_hourly_forecast(
             location=profile.location,
             model=model,
             hourly_variables=hourly_variables,
         )
-        if profile.bise and profile.bise.enabled:
-            west_pressures[model] = client.fetch_hourly_forecast(
-                location=profile.bise.pressure_reference_west,
-                model=model,
-                hourly_variables=["pressure_msl"],
-            )
-            east_pressures[model] = client.fetch_hourly_forecast(
-                location=profile.bise.pressure_reference_east,
-                model=model,
-                hourly_variables=["pressure_msl"],
-            )
+
+    plugins = [p for p in build_plugins(profile.plugins) if p.enabled]
+    plugin_data: dict[str, Any] = {
+        plugin.type: plugin.prefetch(client=client, models=profile.models) for plugin in plugins
+    }
 
     timestamps = sorted({timestamp for forecasts in model_forecasts.values() for timestamp in forecasts})
     accepted_hours: list[EvaluatedHour] = []
@@ -128,13 +120,11 @@ def _evaluate_with_client(
             timestamp=timestamp,
             profile=profile,
             model_forecasts=model_forecasts,
-            west_pressures=west_pressures,
-            east_pressures=east_pressures,
         )
         if evaluated is not None:
             accepted_hours.append(evaluated)
 
-    windows = build_candidate_windows(profile, accepted_hours)
+    windows = build_candidate_windows(profile, accepted_hours, plugins=plugins, plugin_data=plugin_data)
     scored = [window for window in windows if window.score >= 3]
     _attach_context_hours(scored, model_forecasts)
     return scored
@@ -145,8 +135,6 @@ def _evaluate_timestamp(
     timestamp: datetime,
     profile: AlertProfileConfig,
     model_forecasts: dict[str, dict[datetime, HourForecast]],
-    west_pressures: dict[str, dict[datetime, HourForecast]],
-    east_pressures: dict[str, dict[datetime, HourForecast]],
 ) -> EvaluatedHour | None:
     matching: dict[str, HourForecast] = {}
     for model, forecast_by_time in model_forecasts.items():
@@ -163,19 +151,11 @@ def _evaluate_timestamp(
     if agreement.required and not models_agree(list(matching.values()), agreement):
         return None
 
-    gradients = compute_bise_gradients(
-        timestamp=timestamp,
-        profile=profile,
-        models=tuple(matching),
-        west_pressures=west_pressures,
-        east_pressures=east_pressures,
-    )
     directions = [hour.wind_direction for hour in matching.values() if hour.wind_direction is not None]
     speeds = [hour.wind_speed for hour in matching.values() if hour.wind_speed is not None]
     precipitations = [hour.precipitation for hour in matching.values() if hour.precipitation is not None]
     if not directions or not speeds:
         return None
-    gradient_average = sum(gradients.values()) / len(gradients) if gradients else None
     return EvaluatedHour(
         time=timestamp,
         avg_wind_speed_kmh=sum(speeds) / len(speeds),
@@ -183,7 +163,6 @@ def _evaluate_timestamp(
         avg_direction_deg=vector_average_direction(directions),
         models=tuple(sorted(matching)),
         avg_precipitation_mm_per_hour=(sum(precipitations) / len(precipitations)) if precipitations else None,
-        bise_gradient_hpa=gradient_average,
     )
 
 
@@ -200,30 +179,12 @@ def models_agree(hours: list[HourForecast], agreement: ModelAgreementConfig) -> 
     return True
 
 
-def compute_bise_gradients(
-    *,
-    timestamp: datetime,
-    profile: AlertProfileConfig,
-    models: tuple[str, ...],
-    west_pressures: dict[str, dict[datetime, HourForecast]],
-    east_pressures: dict[str, dict[datetime, HourForecast]],
-) -> dict[str, float]:
-    if not profile.bise or not profile.bise.enabled:
-        return {}
-    gradients: dict[str, float] = {}
-    for model in models:
-        west = west_pressures.get(model, {}).get(timestamp)
-        east = east_pressures.get(model, {}).get(timestamp)
-        if west is None or east is None:
-            return {}
-        if west.pressure_msl is None or east.pressure_msl is None:
-            return {}
-        gradients[model] = east.pressure_msl - west.pressure_msl
-    return gradients
-
-
 def build_candidate_windows(
-    profile: AlertProfileConfig, accepted_hours: list[EvaluatedHour]
+    profile: AlertProfileConfig,
+    accepted_hours: list[EvaluatedHour],
+    *,
+    plugins: list[EvaluationPlugin] | None = None,
+    plugin_data: dict[str, Any] | None = None,
 ) -> list[CandidateWindow]:
     if not accepted_hours:
         return []
@@ -236,13 +197,22 @@ def build_candidate_windows(
             windows.append([hour])
 
     return [
-        score_window(profile, window)
+        score_window(profile, window, plugins=plugins or [], plugin_data=plugin_data or {})
         for window in windows
         if len(window) >= profile.wind.min_consecutive_hours
     ]
 
 
-def score_window(profile: AlertProfileConfig, hours: list[EvaluatedHour]) -> CandidateWindow:
+def score_window(
+    profile: AlertProfileConfig,
+    hours: list[EvaluatedHour],
+    *,
+    plugins: list[EvaluationPlugin] | None = None,
+    plugin_data: dict[str, Any] | None = None,
+) -> CandidateWindow:
+    plugins = plugins or []
+    plugin_data = plugin_data or {}
+
     avg_speed = sum(hour.avg_wind_speed_kmh for hour in hours) / len(hours)
     max_speed = max(hour.max_wind_speed_kmh for hour in hours)
     avg_direction = vector_average_direction([hour.avg_direction_deg for hour in hours])
@@ -251,8 +221,6 @@ def score_window(profile: AlertProfileConfig, hours: list[EvaluatedHour]) -> Can
         sum(precipitation_values) / len(precipitation_values) if len(precipitation_values) == len(hours) else None
     )
     max_precipitation = max(precipitation_values) if precipitation_values else None
-    gradient_values = [hour.bise_gradient_hpa for hour in hours if hour.bise_gradient_hpa is not None]
-    gradient = sum(gradient_values) / len(gradient_values) if len(gradient_values) == len(hours) else None
 
     score = 0
     if avg_speed >= profile.wind.strong_speed_kmh:
@@ -265,11 +233,17 @@ def score_window(profile: AlertProfileConfig, hours: list[EvaluatedHour]) -> Can
     elif len(hours) >= profile.wind.min_consecutive_hours:
         score += 1
 
-    if profile.bise and profile.bise.enabled and profile.bise.boost_if_bise and gradient is not None:
-        if gradient >= 3.0:
-            score += 2
-        elif gradient >= profile.bise.east_minus_west_pressure_hpa_min:
-            score += 1
+    contributing_models = sorted({model for hour in hours for model in hour.models})
+    plugin_outputs: dict[str, dict[str, Any]] = {}
+    for plugin in plugins:
+        boost, output = plugin.score_window(
+            window_times=[hour.time for hour in hours],
+            prefetched=plugin_data.get(plugin.type),
+            contributing_models=contributing_models,
+        )
+        score += boost
+        if output:
+            plugin_outputs[plugin.type] = output
 
     if score >= 5:
         classification = "strong"
@@ -278,7 +252,6 @@ def score_window(profile: AlertProfileConfig, hours: list[EvaluatedHour]) -> Can
     else:
         classification = "weak"
 
-    models = sorted({model for hour in hours for model in hour.models})
     window_hours = [
         WindowHour(
             time=hour.time,
@@ -298,12 +271,12 @@ def score_window(profile: AlertProfileConfig, hours: list[EvaluatedHour]) -> Can
         avg_direction_deg=avg_direction,
         avg_precipitation_mm_per_hour=avg_precipitation,
         max_precipitation_mm_per_hour=max_precipitation,
-        bise_pressure_gradient_hpa=gradient,
-        models=models,
+        models=contributing_models,
         dry_filter_applied=False,
         score=score,
         classification=classification,
         hours=window_hours,
+        plugin_outputs=plugin_outputs,
     )
 
 
@@ -338,7 +311,6 @@ def _attach_context_hours(
     """Prepend and append context hours (outside the alert window) to each window's hours list."""
     for window in windows:
         pre_times = [window.start - timedelta(hours=i) for i in range(context_n, 0, -1)]
-        # window.end is already hours[-1].time + 1h (exclusive), so post starts at window.end
         post_times = [window.end + timedelta(hours=i) for i in range(context_n)]
 
         context_before = []

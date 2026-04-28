@@ -15,7 +15,7 @@ def _make_window(
     score: int = 4,
     classification: str = "candidate",
     avg_precipitation_mm_per_hour: float | None = 0.4,
-    bise_pressure_gradient_hpa: float | None = 2.0,
+    bise_gradient_hpa: float | None = 2.0,
     hours: list[WindowHour] | None = None,
 ) -> CandidateWindow:
     return CandidateWindow(
@@ -28,12 +28,12 @@ def _make_window(
         avg_direction_deg=60.0,
         avg_precipitation_mm_per_hour=avg_precipitation_mm_per_hour,
         max_precipitation_mm_per_hour=0.7,
-        bise_pressure_gradient_hpa=bise_pressure_gradient_hpa,
         models=["icon_d2", "meteoswiss_icon_ch2"],
         dry_filter_applied=False,
         score=score,
         classification=classification,
         hours=hours or [],
+        plugin_outputs={"bise": {"gradient_hpa": bise_gradient_hpa}} if bise_gradient_hpa is not None else {},
     )
 
 
@@ -71,7 +71,7 @@ def test_format_window_unavailable_precipitation() -> None:
 
 
 def test_format_window_unavailable_bise() -> None:
-    text = _format_window("alert", _make_window(bise_pressure_gradient_hpa=None))
+    text = _format_window("alert", _make_window(bise_gradient_hpa=None))
     assert "unavailable" in text
 
 

@@ -5,13 +5,14 @@ from pathlib import Path
 
 import click
 
-from parames.config import AppConfig, RuntimeSettings, load_app_config
+from parames.config import AppConfig, RuntimeSettings, definition_to_profile, load_app_config, resolve_profile_defaults
 from parames.delivery.delivery_cli import ConsoleChannel, DeliveryChannel
 from parames.delivery.delivery_telegram import TelegramChannel
 from parames.domain import CandidateWindow
 from parames.evaluation import evaluate
 from parames.forecast import ForecastClientError, OpenMeteoForecastClient
 from parames.persistence import AlertRepository, build_engine
+from parames.seed import seed_command
 
 
 def _default_config_path() -> Path:
@@ -56,7 +57,7 @@ async def _deliver_window(
     *,
     profile_name: str,
     window: CandidateWindow,
-    alert_doc,
+    detection_doc,
     channel_names: list[str],
     channels: dict[str, DeliveryChannel],
     channel_types: dict[str, str],
@@ -74,15 +75,15 @@ async def _deliver_window(
         if not channel_suppress[channel_name]:
             await channel.deliver(profile_name, [window])
             continue
-        if await repo.was_delivered(alert_doc.id, channel_name):
+        if await repo.was_delivered(detection_doc.id, channel_name):
             suppressed += 1
             continue
         attempted += 1
         try:
             await channel.deliver(profile_name, [window])
-        except Exception as exc:  # noqa: BLE001 — record any channel-side failure
+        except Exception as exc:  # noqa: BLE001
             await repo.record_delivery(
-                alert_id=alert_doc.id,
+                detection_id=detection_doc.id,
                 run_id=run_id,
                 channel_name=channel_name,
                 channel_type=channel_types[channel_name],
@@ -91,7 +92,7 @@ async def _deliver_window(
             )
             continue
         await repo.record_delivery(
-            alert_id=alert_doc.id,
+            detection_id=detection_doc.id,
             run_id=run_id,
             channel_name=channel_name,
             channel_type=channel_types[channel_name],
@@ -108,9 +109,25 @@ async def _run(config_path: Path) -> None:
 
     engine = build_engine(settings.mongo_uri)
     repo = AlertRepository(engine)
+
+    # Load alert definitions from DB; fall back to YAML alerts if DB is empty.
+    definitions = await repo.list_alert_definitions(enabled_only=True)
+    if not definitions:
+        click.echo(
+            "Warning: no alert definitions in DB. Run 'parames seed' to populate from YAML.",
+            err=True,
+        )
+        return
+
+    # Convert DB definitions to AlertProfileConfig and apply YAML defaults.
+    resolved = [
+        resolve_profile_defaults(definition_to_profile(d), app_config.defaults)
+        for d in definitions
+    ]
+
     run = await repo.start_run(
         config_path=str(config_path),
-        alert_names=[alert.name for alert in app_config.alerts],
+        alert_definition_ids=[d.id for d in definitions],
     )
 
     windows_found = 0
@@ -120,7 +137,7 @@ async def _run(config_path: Path) -> None:
     error: str | None = None
     try:
         with OpenMeteoForecastClient() as client:
-            for profile in app_config.alerts:
+            for definition, profile in zip(definitions, resolved):
                 profile_suppress = {
                     ch: _resolve_suppress(
                         profile.suppress_duplicates,
@@ -132,12 +149,17 @@ async def _run(config_path: Path) -> None:
                 profile_windows = evaluate(profile, client=client)
                 windows_found += len(profile_windows)
                 for window in profile_windows:
-                    existing = await repo.find_matching_alert(profile.name, window)
-                    alert_doc = await repo.upsert_alert(window, run_id=run.id, existing=existing)
+                    existing = await repo.find_matching_detection(profile.name, window)
+                    detection_doc = await repo.upsert_detection(
+                        window,
+                        alert_definition_id=definition.id,
+                        run_id=run.id,
+                        existing=existing,
+                    )
                     attempted, suppressed = await _deliver_window(
                         profile_name=profile.name,
                         window=window,
-                        alert_doc=alert_doc,
+                        detection_doc=detection_doc,
                         channel_names=profile.delivery,
                         channels=channels,
                         channel_types=channel_types,
@@ -147,7 +169,7 @@ async def _run(config_path: Path) -> None:
                     )
                     deliveries_attempted += attempted
                     deliveries_suppressed += suppressed
-    except Exception as exc:  # noqa: BLE001 — record any failure on the run doc
+    except Exception as exc:  # noqa: BLE001
         status = "failed"
         error = str(exc)
         raise
@@ -162,7 +184,12 @@ async def _run(config_path: Path) -> None:
         )
 
 
-@click.command()
+@click.group()
+def main() -> None:
+    """Parames — paragliding wind alert tool."""
+
+
+@main.command("run")
 @click.option(
     "--config",
     "config_path",
@@ -171,12 +198,15 @@ async def _run(config_path: Path) -> None:
     type=click.Path(exists=True, path_type=Path, dir_okay=False),
     help="Path to the YAML configuration file.",
 )
-def main(config_path: Path) -> None:
-    """Evaluate configured wind alerts and print candidates."""
+def run_command(config_path: Path) -> None:
+    """Evaluate configured wind alerts and deliver candidates."""
     try:
         asyncio.run(_run(config_path))
     except (OSError, ValueError, ForecastClientError) as exc:
         raise click.ClickException(str(exc)) from exc
+
+
+main.add_command(seed_command)
 
 
 if __name__ == "__main__":

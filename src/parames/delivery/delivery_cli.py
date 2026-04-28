@@ -84,12 +84,11 @@ class ConsoleChannel:
                 f"max {window.max_wind_speed_kmh:.1f} km/h"
             )
             self._console.print(f"  🧭 Direction: avg {window.avg_direction_deg:.0f}°")
-            if window.bise_pressure_gradient_hpa is None:
+            bise = window.plugin_outputs.get("bise", {}).get("gradient_hpa")
+            if bise is None:
                 self._console.print("  🌡  Bise gradient: unavailable")
             else:
-                self._console.print(
-                    f"  🌡  Bise gradient: +{window.bise_pressure_gradient_hpa:.1f} hPa east-west"
-                )
+                self._console.print(f"  🌡  Bise gradient: +{bise:.1f} hPa east-west")
             self._console.print(
                 "  💧 Precipitation: "
                 + (

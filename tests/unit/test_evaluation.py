@@ -39,12 +39,12 @@ def test_vector_average_direction_wraps() -> None:
     assert average in {0.0, 360.0}
 
 
-def test_evaluate_hour_candidate_checks_filters(default_config, fixed_now) -> None:
+def test_evaluate_hour_candidate_accepts_valid_hour(default_config, fixed_now) -> None:
     profile = default_config.alerts[0]
     hour = HourForecast(
         time=fixed_now.replace(hour=12),
-        wind_speed=9.0,
-        wind_direction=50.0,
+        wind_speed=11.0,  # >= min_speed_kmh 10.0
+        wind_direction=50.0,  # in range [30, 100]
         precipitation=0.0,
     )
 
@@ -56,13 +56,12 @@ def test_evaluate_hour_candidate_checks_filters(default_config, fixed_now) -> No
     )
 
 
-def test_evaluate_hour_candidate_does_not_reject_precipitation(default_config, fixed_now) -> None:
-    profile = default_config.alerts[0].model_copy(
-        update={"dry": {"enabled": True, "max_precipitation_mm_per_hour": 0.0}}
-    )
+def test_evaluate_hour_candidate_does_not_reject_on_precipitation(default_config, fixed_now) -> None:
+    """evaluate_hour_candidate does not filter on precipitation; that's done upstream."""
+    profile = default_config.alerts[0]
     hour = HourForecast(
         time=fixed_now.replace(hour=12),
-        wind_speed=9.0,
+        wind_speed=11.0,
         wind_direction=50.0,
         precipitation=2.5,
     )
@@ -93,7 +92,6 @@ def test_build_candidate_windows_filters_short_runs(default_config, fixed_now) -
             avg_direction_deg=60.0,
             models=("icon_ch2", "icon_d2"),
             avg_precipitation_mm_per_hour=0.0,
-            bise_gradient_hpa=2.0,
         ),
         EvaluatedHour(
             time=fixed_now + timedelta(hours=1),
@@ -102,7 +100,6 @@ def test_build_candidate_windows_filters_short_runs(default_config, fixed_now) -
             avg_direction_deg=70.0,
             models=("icon_ch2", "icon_d2"),
             avg_precipitation_mm_per_hour=0.1,
-            bise_gradient_hpa=2.0,
         ),
         EvaluatedHour(
             time=fixed_now + timedelta(hours=3),
@@ -111,7 +108,6 @@ def test_build_candidate_windows_filters_short_runs(default_config, fixed_now) -
             avg_direction_deg=80.0,
             models=("icon_ch2", "icon_d2"),
             avg_precipitation_mm_per_hour=0.2,
-            bise_gradient_hpa=2.0,
         ),
     ]
 
@@ -121,9 +117,7 @@ def test_build_candidate_windows_filters_short_runs(default_config, fixed_now) -
 
 
 def test_score_window_classification_boundaries(default_config, fixed_now) -> None:
-    profile = default_config.alerts[0].model_copy(
-        update={"dry": None, "bise": None}
-    )
+    profile = default_config.alerts[0].model_copy(update={"dry": None, "plugins": []})
     hours = [
         EvaluatedHour(
             time=fixed_now + timedelta(hours=index),
@@ -132,15 +126,14 @@ def test_score_window_classification_boundaries(default_config, fixed_now) -> No
             avg_direction_deg=60.0,
             models=("icon_ch2", "icon_d2"),
             avg_precipitation_mm_per_hour=0.1,
-            bise_gradient_hpa=None,
         )
         for index in range(4)
     ]
 
     window = score_window(profile, hours)
-    assert window.score == 4
+    # speed 10.5 >= min 10.0 but < strong 12.0 → +1; 4 hours → +2; no plugins → total 3
+    assert window.score == 3
     assert window.classification == "candidate"
-
 
 
 def test_evaluate_positive_snapshot_replays_expected_window(default_config) -> None:
@@ -166,4 +159,4 @@ def test_evaluate_positive_snapshot_replays_expected_window(default_config) -> N
     assert window.avg_wind_speed_kmh == pytest.approx(expected["avg_wind_speed_kmh"])
     assert window.max_wind_speed_kmh == pytest.approx(expected["max_wind_speed_kmh"])
     assert window.avg_direction_deg == pytest.approx(expected["avg_direction_deg"])
-    assert window.bise_pressure_gradient_hpa == pytest.approx(expected["bise_pressure_gradient_hpa"])
+    assert window.plugin_outputs["bise"]["gradient_hpa"] == pytest.approx(expected["bise_pressure_gradient_hpa"])
