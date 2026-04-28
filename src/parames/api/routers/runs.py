@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from parames.api.deps import Repo
+from parames.cli import _run
+from parames.config import RuntimeSettings
 from parames.persistence.models import Run
 
 router = APIRouter(prefix="/runs", tags=["runs"])
@@ -19,3 +21,11 @@ async def get_run(run_id: str, repo: Repo) -> Run:
     if doc is None:
         raise HTTPException(status_code=404, detail="Run not found")
     return doc
+
+
+@router.post("", status_code=202)
+async def trigger_run(background_tasks: BackgroundTasks) -> dict:
+    """Start a run immediately in the background."""
+    settings = RuntimeSettings()
+    background_tasks.add_task(_run, settings.config_path)
+    return {"message": "Run started"}

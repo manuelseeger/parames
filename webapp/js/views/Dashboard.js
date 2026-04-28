@@ -33,6 +33,8 @@ export const Dashboard = {
     const detections = ref(null);
     const deliveries = ref(null);
     const error = ref(null);
+    const triggering = ref(false);
+    const triggerMsg = ref(null);
 
     onMounted(async () => {
       try {
@@ -49,11 +51,31 @@ export const Dashboard = {
       }
     });
 
-    return { runs, detections, deliveries, error, fmtDateTime, fmtTimeRange, statusPill, classificationPill };
+    async function runNow() {
+      triggering.value = true;
+      triggerMsg.value = null;
+      try {
+        await api.triggerRun();
+        triggerMsg.value = 'Run started';
+        setTimeout(async () => {
+          runs.value = await api.listRuns(25);
+        }, 2000);
+      } catch (e) {
+        triggerMsg.value = 'Error: ' + e.message;
+      } finally {
+        triggering.value = false;
+      }
+    }
+
+    return { runs, detections, deliveries, error, triggering, triggerMsg, runNow, fmtDateTime, fmtTimeRange, statusPill, classificationPill };
   },
   template: `
     <div>
-      <h1>Dashboard</h1>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+        <h1 style="margin:0;">Dashboard</h1>
+        <button class="btn btn-primary btn-sm" @click="runNow" :disabled="triggering">{{ triggering ? 'Starting…' : 'Run now' }}</button>
+        <span v-if="triggerMsg" class="muted" style="font-size:13px;">{{ triggerMsg }}</span>
+      </div>
       <div v-if="error" class="error">{{ error }}</div>
 
       <div class="cards-row">
