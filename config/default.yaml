@@ -9,7 +9,6 @@ defaults:
 
 alerts:
   - name: zurich_bise
-    suppress_duplicates: false
     description: "NE/E wind for ground handling - Zurich Allmend"
     location:
       name: zurich_allmend

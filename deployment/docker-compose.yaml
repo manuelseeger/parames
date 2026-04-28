@@ -10,7 +10,6 @@ services:
       PARAMES_CONFIG_PATH: /app/config/default.yaml
       PARAMES_TELEGRAM_BOT_TOKEN: ${PARAMES_TELEGRAM_BOT_TOKEN}
       PARAMES_MONGO_URI: mongodb://mongo:27017/parames
-      PARAMES_SCHEDULER__CRON_MINUTE: "*/1"
       PYTHONUNBUFFERED: "1"
     # Override config mount for custom config (optional)
     # volumes:
