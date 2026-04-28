@@ -86,7 +86,7 @@ class AlertProfileConfig(BaseModel):
     description: str | None = None
     location: LocationConfig
     models: list[str] = Field(min_length=1)
-    forecast_hours: int | None = Field(default=None, ge=1, le=72)
+    forecast_hours: int = Field(default=48, ge=1, le=72)
     wind_level_m: int | None = Field(default=None, ge=1)
     model_agreement: ModelAgreementConfig | None = None
     wind: WindConfig
