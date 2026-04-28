@@ -28,7 +28,7 @@ def _build_channels(app_config: AppConfig, settings: RuntimeSettings) -> dict[st
                 raise click.ClickException(
                     f"delivery_channels.{name}: PARAMES_TELEGRAM_BOT_TOKEN is not set"
                 )
-            chat_id = cfg.model_extra.get("chat_id")
+            chat_id = (cfg.model_extra or {}).get("chat_id")
             if not chat_id:
                 raise click.ClickException(f"delivery_channels.{name}: 'chat_id' is required")
             channels[name] = TelegramChannel(

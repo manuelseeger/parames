@@ -63,6 +63,9 @@ class DeliveryChannelConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class SchedulerConfig(BaseModel):
+    cron_hour: str = "*/6"
+
 class AlertProfileConfig(BaseModel):
     name: str
     description: str | None = None
@@ -87,6 +90,7 @@ class AlertProfileConfig(BaseModel):
 
 class AppConfig(BaseModel):
     defaults: DefaultsConfig = Field(default_factory=DefaultsConfig)
+    scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
     alerts: list[AlertProfileConfig]
     delivery_channels: dict[str, DeliveryChannelConfig]
 

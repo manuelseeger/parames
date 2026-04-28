@@ -10,6 +10,7 @@ services:
       PARAMES_CONFIG_PATH: /app/config/default.yaml
       PARAMES_TELEGRAM_BOT_TOKEN: ${PARAMES_TELEGRAM_BOT_TOKEN}
       PARAMES_MONGO_URI: mongodb://mongo:27017/parames
+      PYTHONUNBUFFERED: "1"
     volumes:
       - ../config:/app/config:ro
     depends_on:

@@ -52,3 +52,6 @@ delivery_channels:
   telegram:
     type: telegram
     chat_id: "@mes_meteo"
+
+scheduler:
+  cron_hour: "*/6"
