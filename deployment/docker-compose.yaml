@@ -9,6 +9,7 @@ services:
     environment:
       PARAMES_CONFIG_PATH: /app/config/default.yaml
       PARAMES_MONGO_URI: mongodb://mongo:27017/parames
+      PARAMES_TELEGRAM_BOT_TOKEN: ${PARAMES_TELEGRAM_BOT_TOKEN}
       PYTHONUNBUFFERED: "1"
     ports:
       - "8090:8000"
