@@ -42,5 +42,6 @@ export const api = {
   triggerRun: () => request('/runs', { method: 'POST' }),
   listRuns: (limit = 25) => request(`/runs?limit=${limit}`),
   listDetections: (limit = 25) => request(`/detections?limit=${limit}`),
+  getDetection: (id) => request(`/detections/${id}`),
   listDeliveries: (limit = 25) => request(`/deliveries?limit=${limit}`),
 };
