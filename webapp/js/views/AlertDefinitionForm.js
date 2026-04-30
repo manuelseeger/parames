@@ -9,18 +9,23 @@ function emptyDefinition() {
     enabled: true,
     location: { name: '', latitude: 0, longitude: 0 },
     models: [],
-    forecast_hours: null,
-    wind_level_m: null,
-    model_agreement: null,
+    forecast_hours: 48,
+    wind_level_m: 10,
+    model_agreement: {
+      required: true,
+      min_models_matching: 2,
+      max_direction_delta_deg: 35,
+      max_speed_delta_kmh: 8,
+    },
     wind: {
       min_speed_kmh: 10,
       strong_speed_kmh: 12,
       direction_min_deg: 0,
-      direction_max_deg: 90,
+      direction_max_deg: 360,
       min_consecutive_hours: 2,
     },
-    time_window: null,
-    dry: null,
+    time_window: { start_hour: 8, end_hour: 20 },
+    dry: { enabled: true, max_precipitation_mm_per_hour: 0.2 },
     plugins: [],
     delivery: [],
     suppress_duplicates: null,
@@ -48,10 +53,10 @@ export const AlertDefinitionForm = {
     // chip-input scratch state — comma-separated text
     const modelsText = ref('');
     const deliveryText = ref('');
-    // optional-section toggles
-    const hasTimeWindow = ref(false);
-    const hasDry = ref(false);
-    const hasModelAgreement = ref(false);
+    // optional-section toggles (all enabled by default for new definitions)
+    const hasTimeWindow = ref(true);
+    const hasDry = ref(true);
+    const hasModelAgreement = ref(true);
 
     const isEdit = computed(() => !!props.id);
 
@@ -204,18 +209,21 @@ export const AlertDefinitionForm = {
               <input type="number" step="any" v-model.number="def.wind.strong_speed_kmh" required>
             </div>
             <div class="field">
-              <label>Direction min (°)</label>
-              <input type="number" step="any" v-model.number="def.wind.direction_min_deg" required>
-            </div>
-            <div class="field">
-              <label>Direction max (°)</label>
-              <input type="number" step="any" v-model.number="def.wind.direction_max_deg" required>
-            </div>
-            <div class="field">
               <label>Min consecutive hours</label>
               <input type="number" v-model.number="def.wind.min_consecutive_hours" required>
             </div>
           </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Direction min (°)</label>
+              <input type="number" min="0" max="360" step="1" v-model.number="def.wind.direction_min_deg" required>
+            </div>
+            <div class="field">
+              <label>Direction max (°)</label>
+              <input type="number" min="0" max="360" step="1" v-model.number="def.wind.direction_max_deg" required>
+            </div>
+          </div>
+          <div class="field-help">Direction range 0–360: use 0–360 or 0–0 for any direction. Wrap-around supported (e.g. 330–30 for N).</div>
         </section>
 
         <!-- Time window -->
@@ -333,22 +341,22 @@ export const AlertDefinitionForm = {
 
         <!-- Advanced -->
         <section class="card">
-          <h2>Advanced (optional, falls back to defaults)</h2>
+          <h2>Advanced</h2>
           <div class="field-row">
             <div class="field">
               <label>Forecast hours</label>
-              <input type="number" v-model.number="def.forecast_hours" placeholder="defaults to YAML">
+              <input type="number" v-model.number="def.forecast_hours">
             </div>
             <div class="field">
               <label>Wind level (m)</label>
-              <input type="number" v-model.number="def.wind_level_m" placeholder="defaults to YAML">
+              <input type="number" v-model.number="def.wind_level_m">
             </div>
           </div>
 
           <div class="section-header" style="margin-top: 12px;">
             <h3 style="margin: 0;">Model agreement</h3>
             <button type="button" class="btn btn-sm" @click="toggleModelAgreement">
-              {{ hasModelAgreement ? 'Remove' : 'Override' }}
+              {{ hasModelAgreement ? 'Remove' : 'Add' }}
             </button>
           </div>
           <div v-if="hasModelAgreement" class="field-row">
@@ -369,6 +377,7 @@ export const AlertDefinitionForm = {
               <input type="number" step="any" v-model.number="def.model_agreement.max_speed_delta_kmh">
             </div>
           </div>
+          <div v-else class="muted">No model agreement check.</div>
         </section>
 
         <div class="form-actions">

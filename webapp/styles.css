@@ -69,6 +69,26 @@ code, pre, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size
   gap: 16px;
 }
 
+/* dashboard-specific two-zone grid */
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.dash-runs {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .dash-grid { grid-template-columns: 1fr; }
+}
+
+.table-scroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+
 /* ============ buttons ============ */
 .btn {
   display: inline-block;
