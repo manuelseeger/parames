@@ -1,5 +1,5 @@
 defaults:
-  forecast_hours: 72
+  forecast_hours: 48
   wind_level_m: 10
   model_agreement:
     required: true

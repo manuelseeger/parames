@@ -22,7 +22,7 @@ services:
 
   scheduler:
     build:
-      context: ..
+      context: .. 
       dockerfile: Dockerfile
     command: uv run python -m parames.scheduler
     environment:

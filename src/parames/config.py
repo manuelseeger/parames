@@ -86,7 +86,7 @@ class AlertProfileConfig(BaseModel):
     description: str | None = None
     location: LocationConfig
     models: list[str] = Field(min_length=1)
-    forecast_hours: int = Field(default=48, ge=1, le=72)
+    forecast_hours: int | None = Field(default=None, ge=1, le=72)
     wind_level_m: int | None = Field(default=None, ge=1)
     model_agreement: ModelAgreementConfig | None = None
     wind: WindConfig
@@ -132,6 +132,7 @@ class RuntimeSettings(BaseSettings):
     telegram_bot_token: SecretStr | None = None
     mongo_uri: str = "mongodb://localhost:27017/parames"
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
+    dev_mode: bool = False
 
     model_config = SettingsConfigDict(
         env_prefix="PARAMES_",
