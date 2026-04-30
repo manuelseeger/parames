@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from pyodmongo import MainBaseModel
+from pydantic import field_validator
 
 
 class WindowHour(MainBaseModel):
@@ -40,3 +41,8 @@ class CandidateWindow(MainBaseModel):
     classification: str
     hours: list[WindowHour] = []
     plugin_outputs: dict[str, dict[str, Any]] = {}
+
+    @field_validator("plugin_outputs", mode="before")
+    @classmethod
+    def _none_to_empty_dict(cls, v):
+        return v if v is not None else {}
