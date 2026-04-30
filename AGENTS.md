@@ -1,3 +1,7 @@
+# Wind alert system for good paragliding / groundhandling conditions
+
+Initial spec: [./spec/Initial Wind Alert.md](./spec/Initial Wind Alert.md)
+
 # Python standard
 
 Use: 

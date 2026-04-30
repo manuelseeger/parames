@@ -29,6 +29,7 @@ function statusPill(status) {
 }
 
 function classificationPill(c) {
+  if (c === 'excellent') return 'pill-excellent';
   if (c === 'strong') return 'pill-ok';
   if (c === 'candidate') return 'pill-warn';
   return 'pill-muted';
@@ -131,7 +132,7 @@ async function runNow() {
                 <td>{{ d.alert_name }}</td>
                 <td class="nowrap">{{ fmtTimeRange(d.start, d.end) }}</td>
                 <td><span class="pill" :class="classificationPill(d.classification)">{{ d.classification }}</span></td>
-                <td class="right">{{ d.score }}</td>
+                <td class="right">{{ d.score ?? '—' }}</td>
               </tr>
             </tbody>
           </table>

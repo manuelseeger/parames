@@ -25,6 +25,7 @@ function fmtTimeRange(start, end) {
 }
 
 function classificationPill(c) {
+  if (c === 'excellent') return 'pill-excellent';
   if (c === 'strong') return 'pill-ok';
   if (c === 'candidate') return 'pill-warn';
   return 'pill-muted';
@@ -151,7 +152,7 @@ function sparkBand(hours) {
           </span>
           <span class="spacer"/>
           <span class="score-badge" :class="`score-${d.classification}`">
-            {{ d.score }} pts
+            {{ d.score ?? '—' }} pts
           </span>
         </div>
       </div>

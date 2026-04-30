@@ -25,6 +25,9 @@ __all__ = [
     "ModelAgreementConfig",
     "RuntimeSettings",
     "SchedulerConfig",
+    "ScoringConfig",
+    "ScoringTiersConfig",
+    "ScoringWeightsConfig",
     "TimeWindowConfig",
     "WindConfig",
     "definition_to_profile",
@@ -81,6 +84,32 @@ class SchedulerConfig(BaseModel):
     cron_minute: str | None = None
 
 
+class ScoringWeightsConfig(MainBaseModel):
+    wind_speed: float = Field(default=1.0, ge=0)
+    wind_duration: float = Field(default=1.0, ge=0)
+    plugins: dict[str, float] = Field(default_factory=lambda: {"bise": 0.5})
+
+
+class ScoringTiersConfig(MainBaseModel):
+    candidate_min: int = Field(default=40, ge=0, le=100)
+    strong_min: int = Field(default=70, ge=0, le=100)
+    excellent_min: int = Field(default=85, ge=0, le=100)
+
+    @model_validator(mode="after")
+    def validate_ordering(self) -> "ScoringTiersConfig":
+        if not (self.candidate_min < self.strong_min < self.excellent_min):
+            raise ValueError(
+                "scoring.tiers must satisfy candidate_min < strong_min < excellent_min"
+            )
+        return self
+
+
+class ScoringConfig(MainBaseModel):
+    weights: ScoringWeightsConfig = Field(default_factory=ScoringWeightsConfig)
+    emit_threshold: int = Field(default=40, ge=0, le=100)
+    tiers: ScoringTiersConfig = Field(default_factory=ScoringTiersConfig)
+
+
 class AlertProfileConfig(BaseModel):
     name: str
     description: str | None = None
@@ -106,6 +135,7 @@ class AlertProfileConfig(BaseModel):
 
 class AppConfig(BaseModel):
     defaults: DefaultsConfig = Field(default_factory=DefaultsConfig)
+    scoring: ScoringConfig = Field(default_factory=ScoringConfig)
 
     alerts: list[AlertProfileConfig] = Field(default_factory=list)
     delivery_channels: dict[str, DeliveryChannelConfig]
@@ -117,10 +147,17 @@ class AppConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_config(self) -> "AppConfig":
+        from aiogram.utils.token import TokenValidationError
+
         for name, channel in self.delivery_channels.items():
             if channel.type == "telegram":
                 settings = RuntimeSettings()
-                if not validate_telegram_token(settings.telegram_bot_token.get_secret_value() if settings.telegram_bot_token else ""):
+                token = settings.telegram_bot_token.get_secret_value() if settings.telegram_bot_token else ""
+                try:
+                    valid = bool(validate_telegram_token(token))
+                except TokenValidationError:
+                    valid = False
+                if not valid:
                     logger.error(f"Telegram bot token not set for channel '{name}'. Set PARAMES_TELEGRAM_BOT_TOKEN env var.")
                 break
 

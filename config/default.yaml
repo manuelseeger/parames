@@ -7,6 +7,18 @@ defaults:
     max_direction_delta_deg: 35
     max_speed_delta_kmh: 8.0
 
+scoring:
+  weights:
+    wind_speed: 1.0
+    wind_duration: 1.0
+    plugins:
+      bise: 0.5
+  emit_threshold: 40
+  tiers:
+    candidate_min: 40
+    strong_min: 70
+    excellent_min: 85
+
 alerts:
   - name: zurich_bise
     description: "NE/E wind for ground handling - Zurich Allmend"
@@ -34,7 +46,6 @@ alerts:
       - type: bise
         enabled: true
         east_minus_west_pressure_hpa_min: 1.5
-        boost_if_bise: true
         pressure_reference_west:
           name: geneva
           latitude: 46.204

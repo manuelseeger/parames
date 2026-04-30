@@ -41,11 +41,22 @@ def _build_chart(hours: list[WindowHour]) -> str:
 
 
 def _format_window(alert_name: str, window: CandidateWindow) -> str:
-    medal = "🟢" if window.score >= 5 else "🟡"
+    if window.score is None:
+        medal = "⚪"
+        score_str = "unavailable"
+    elif window.score >= 85:
+        medal = "🌟"
+        score_str = str(window.score)
+    elif window.score >= 70:
+        medal = "🟢"
+        score_str = str(window.score)
+    else:
+        medal = "🟡"
+        score_str = str(window.score)
     classification = window.classification.upper()
 
     header = (
-        f"{medal} *{_md2(alert_name)} — {_md2(classification)}*  ⭐ {window.score}/7"
+        f"{medal} *{_md2(alert_name)} — {_md2(classification)}*  ⭐ {_md2(score_str)}"
     )
     date_line = (
         f"📅 {_md2(window.start.strftime('%a %Y-%m-%d %H:%M'))} – "

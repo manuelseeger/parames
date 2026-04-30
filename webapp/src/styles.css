@@ -223,6 +223,7 @@ code, pre, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size
 .pill-warn { background: #fef3c7; color: #92400e; }
 .pill-err { background: #fde2e2; color: #9b1c1c; }
 .pill-muted { background: #e4e7eb; color: #52606d; }
+.pill-excellent { background: #fef3c0; color: #854d0e; box-shadow: 0 0 0 1px #d4a017 inset; }
 
 /* ============ misc ============ */
 .toolbar {
@@ -369,6 +370,7 @@ code, pre, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size
   color: #1d4ed8;
 }
 
+.score-badge.score-excellent { background: #fef3c0; color: #854d0e; box-shadow: 0 0 0 1px #d4a017 inset; }
 .score-badge.score-strong { background: #dcfce7; color: #166534; }
 .score-badge.score-candidate { background: #fef9c3; color: #854d0e; }
 

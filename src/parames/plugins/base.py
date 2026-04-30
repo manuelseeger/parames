@@ -22,8 +22,15 @@ class EvaluationPlugin(Protocol):
 
     Lifecycle per evaluation run:
       1. `prefetch` — fetch any extra forecast data the plugin needs.
-      2. `score_window` — at window-scoring time, return a (score_delta, output_dict).
+      2. `score_window` — at window-scoring time, return a (sub_score, output_dict).
+         `sub_score` is a float in [0, 100] that participates in the weighted-mean
+         aggregator, or `None` to opt out of this window (for "corroboration"
+         signals like Bise that should only contribute when actively positive,
+         and for any signal whose data is missing).
          The output_dict is stored on `CandidateWindow.plugin_outputs[type]`.
+
+    Per-plugin weight is global config, looked up from
+    `ScoringConfig.weights.plugins[type]` at aggregation time.
     """
 
     type: ClassVar[str]
@@ -39,7 +46,7 @@ class EvaluationPlugin(Protocol):
         window_times: list[datetime],
         prefetched: Any,
         contributing_models: list[str],
-    ) -> tuple[int, dict[str, Any]]: ...
+    ) -> tuple[float | None, dict[str, Any]]: ...
 
 
 PLUGIN_REGISTRY: dict[str, type[EvaluationPlugin]] = {}

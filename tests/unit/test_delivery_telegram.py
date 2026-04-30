@@ -12,7 +12,7 @@ from parames.domain import CandidateWindow, WindowHour
 
 def _make_window(
     *,
-    score: int = 4,
+    score: int | None = 50,
     classification: str = "candidate",
     avg_precipitation_mm_per_hour: float | None = 0.4,
     bise_gradient_hpa: float | None = 2.0,
@@ -56,8 +56,13 @@ def test_format_window_contains_alert_name() -> None:
 
 
 def test_format_window_contains_score() -> None:
-    text = _format_window("alert", _make_window(score=5))
-    assert "5/7" in text
+    text = _format_window("alert", _make_window(score=78))
+    assert "78" in text
+
+
+def test_format_window_unavailable_score_renders_marker() -> None:
+    text = _format_window("alert", _make_window(score=None, classification="unavailable"))
+    assert "unavailable" in text
 
 
 def test_format_window_contains_precipitation() -> None:
@@ -121,6 +126,6 @@ def test_two_windows_send_two_messages() -> None:
     mock_bot.__aenter__ = AsyncMock(return_value=mock_bot)
 
     with patch("parames.delivery.delivery_telegram.Bot", return_value=mock_bot):
-        asyncio.run(channel.deliver("alert", [_make_window(), _make_window(score=6)]))
+        asyncio.run(channel.deliver("alert", [_make_window(score=50), _make_window(score=80)]))
 
     assert mock_bot.send_message.call_count == 2

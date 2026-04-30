@@ -145,7 +145,7 @@ async def run(config_path: Path) -> None:
                     )
                     for ch in profile.delivery
                 }
-                profile_windows = evaluate(profile, client=client)
+                profile_windows = evaluate(profile, client=client, scoring=app_config.scoring)
                 windows_found += len(profile_windows)
                 for window in profile_windows:
                     existing = await repo.find_matching_detection(profile.name, window)

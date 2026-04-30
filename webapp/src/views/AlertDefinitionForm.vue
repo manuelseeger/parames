@@ -42,7 +42,6 @@ function emptyBisePlugin() {
     type: 'bise',
     enabled: true,
     east_minus_west_pressure_hpa_min: 1.5,
-    boost_if_bise: true,
     pressure_reference_west: { name: '', latitude: 0, longitude: 0 },
     pressure_reference_east: { name: '', latitude: 0, longitude: 0 },
   };
@@ -273,10 +272,6 @@ function cancel() { navigate('/alerts'); }
               <div class="field">
                 <label>Min E−W gradient (hPa)</label>
                 <input type="number" step="any" v-model.number="p.east_minus_west_pressure_hpa_min" required>
-              </div>
-              <div class="field-checkbox" style="align-self: end;">
-                <input type="checkbox" :id="'bise-boost-' + idx" v-model="p.boost_if_bise">
-                <label :for="'bise-boost-' + idx">Apply score boost</label>
               </div>
             </div>
             <h3 style="margin-top: 12px;">West reference</h3>

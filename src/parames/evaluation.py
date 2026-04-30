@@ -7,10 +7,16 @@ from itertools import combinations
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from parames.config import AlertProfileConfig, DryConfig, ModelAgreementConfig, TimeWindowConfig, WindConfig
+import logging
+
+from parames.config import AlertProfileConfig, DryConfig, ModelAgreementConfig, ScoringConfig, TimeWindowConfig, WindConfig
 from parames.domain import CandidateWindow, HourForecast, WindowHour
 from parames.forecast import OpenMeteoForecastClient, ZURICH_TIMEZONE
 from parames.plugins import EvaluationPlugin, build_plugins
+
+logger = logging.getLogger(__name__)
+_BUILTIN_SUBSIGNALS = ("wind_speed", "wind_duration")
+_warned_unknown_plugins: set[str] = set()
 
 
 @dataclass(frozen=True)
@@ -69,14 +75,16 @@ def evaluate(
     *,
     client: OpenMeteoForecastClient | None = None,
     now: datetime | None = None,
+    scoring: ScoringConfig | None = None,
 ) -> list[CandidateWindow]:
     if profile.forecast_hours is None or profile.wind_level_m is None or profile.model_agreement is None:
         raise ValueError("Alert profile must be resolved with defaults before evaluation")
 
     active_client = client or OpenMeteoForecastClient()
     should_close = client is None
+    effective_scoring = scoring if scoring is not None else ScoringConfig()
     try:
-        return _evaluate_with_client(profile, active_client, now=now)
+        return _evaluate_with_client(profile, active_client, now=now, scoring=effective_scoring)
     finally:
         if should_close:
             active_client.close()
@@ -87,6 +95,7 @@ def _evaluate_with_client(
     client: OpenMeteoForecastClient,
     *,
     now: datetime | None,
+    scoring: ScoringConfig,
 ) -> list[CandidateWindow]:
     timezone = ZoneInfo(ZURICH_TIMEZONE)
     current_time = now.astimezone(timezone) if now else datetime.now(timezone)
@@ -124,8 +133,13 @@ def _evaluate_with_client(
         if evaluated is not None:
             accepted_hours.append(evaluated)
 
-    windows = build_candidate_windows(profile, accepted_hours, plugins=plugins, plugin_data=plugin_data)
-    scored = [window for window in windows if window.score >= 3]
+    windows = build_candidate_windows(
+        profile, accepted_hours, plugins=plugins, plugin_data=plugin_data, scoring=scoring
+    )
+    scored = [
+        window for window in windows
+        if window.score is not None and window.score >= scoring.emit_threshold
+    ]
     _attach_context_hours(scored, model_forecasts)
     return scored
 
@@ -185,6 +199,7 @@ def build_candidate_windows(
     *,
     plugins: list[EvaluationPlugin] | None = None,
     plugin_data: dict[str, Any] | None = None,
+    scoring: ScoringConfig | None = None,
 ) -> list[CandidateWindow]:
     if not accepted_hours:
         return []
@@ -196,11 +211,74 @@ def build_candidate_windows(
         else:
             windows.append([hour])
 
+    effective_scoring = scoring if scoring is not None else ScoringConfig()
     return [
-        score_window(profile, window, plugins=plugins or [], plugin_data=plugin_data or {})
+        score_window(
+            profile,
+            window,
+            plugins=plugins or [],
+            plugin_data=plugin_data or {},
+            scoring=effective_scoring,
+        )
         for window in windows
         if len(window) >= profile.wind.min_consecutive_hours
     ]
+
+
+def _subscore_wind_speed(avg_speed_kmh: float, wind: WindConfig) -> float:
+    """Linear ramp 0..100. 0 at min_speed, 100 at strong_speed × 1.3 (clamped)."""
+    if avg_speed_kmh < wind.min_speed_kmh:
+        return 0.0
+    upper = wind.strong_speed_kmh * 1.3
+    if upper <= wind.min_speed_kmh:
+        return 100.0
+    fraction = (avg_speed_kmh - wind.min_speed_kmh) / (upper - wind.min_speed_kmh)
+    return max(0.0, min(100.0, fraction * 100.0))
+
+
+def _subscore_wind_duration(duration_hours: int, wind: WindConfig) -> float:
+    """0 below min_consecutive, 50 at min_consecutive, linear to 100 at 4h+."""
+    if duration_hours < wind.min_consecutive_hours:
+        return 0.0
+    if duration_hours >= 4:
+        return 100.0
+    if wind.min_consecutive_hours >= 4:
+        return 100.0
+    span = 4 - wind.min_consecutive_hours
+    extra = duration_hours - wind.min_consecutive_hours
+    return 50.0 + (extra / span) * 50.0
+
+
+def _classify(score: int | None, tiers) -> str:
+    if score is None:
+        return "unavailable"
+    if score >= tiers.excellent_min:
+        return "excellent"
+    if score >= tiers.strong_min:
+        return "strong"
+    if score >= tiers.candidate_min:
+        return "candidate"
+    return "weak"
+
+
+def _aggregate_subscores(
+    subscores: dict[str, float | None],
+    weights: dict[str, float],
+) -> int | None:
+    weighted_sum = 0.0
+    weight_total = 0.0
+    for name, value in subscores.items():
+        if value is None:
+            continue
+        w = weights.get(name, 0.0)
+        if w <= 0:
+            continue
+        weighted_sum += w * value
+        weight_total += w
+    if weight_total == 0:
+        return None
+    raw = weighted_sum / weight_total
+    return max(0, min(100, round(raw)))
 
 
 def score_window(
@@ -209,9 +287,11 @@ def score_window(
     *,
     plugins: list[EvaluationPlugin] | None = None,
     plugin_data: dict[str, Any] | None = None,
+    scoring: ScoringConfig | None = None,
 ) -> CandidateWindow:
     plugins = plugins or []
     plugin_data = plugin_data or {}
+    effective_scoring = scoring if scoring is not None else ScoringConfig()
 
     avg_speed = sum(hour.avg_wind_speed_kmh for hour in hours) / len(hours)
     max_speed = max(hour.max_wind_speed_kmh for hour in hours)
@@ -222,35 +302,27 @@ def score_window(
     )
     max_precipitation = max(precipitation_values) if precipitation_values else None
 
-    score = 0
-    if avg_speed >= profile.wind.strong_speed_kmh:
-        score += 2
-    elif avg_speed >= profile.wind.min_speed_kmh:
-        score += 1
-
-    if len(hours) >= 4:
-        score += 2
-    elif len(hours) >= profile.wind.min_consecutive_hours:
-        score += 1
-
     contributing_models = sorted({model for hour in hours for model in hour.models})
+
+    subscores: dict[str, float | None] = {
+        "wind_speed": _subscore_wind_speed(avg_speed, profile.wind),
+        "wind_duration": _subscore_wind_duration(len(hours), profile.wind),
+    }
+
     plugin_outputs: dict[str, dict[str, Any]] = {}
     for plugin in plugins:
-        boost, output = plugin.score_window(
+        sub_score, output = plugin.score_window(
             window_times=[hour.time for hour in hours],
             prefetched=plugin_data.get(plugin.type),
             contributing_models=contributing_models,
         )
-        score += boost
+        subscores[plugin.type] = sub_score
         if output:
             plugin_outputs[plugin.type] = output
 
-    if score >= 5:
-        classification = "strong"
-    elif score >= 3:
-        classification = "candidate"
-    else:
-        classification = "weak"
+    weights = _build_weight_map(plugins, effective_scoring)
+    score = _aggregate_subscores(subscores, weights)
+    classification = _classify(score, effective_scoring.tiers)
 
     window_hours = [
         WindowHour(
@@ -275,9 +347,33 @@ def score_window(
         dry_filter_applied=False,
         score=score,
         classification=classification,
+        subscores=subscores,
         hours=window_hours,
         plugin_outputs=plugin_outputs,
     )
+
+
+def _build_weight_map(
+    plugins: list[EvaluationPlugin],
+    scoring: ScoringConfig,
+) -> dict[str, float]:
+    weights: dict[str, float] = {
+        "wind_speed": scoring.weights.wind_speed,
+        "wind_duration": scoring.weights.wind_duration,
+    }
+    plugin_weights = scoring.weights.plugins
+    for plugin in plugins:
+        if plugin.type in plugin_weights:
+            weights[plugin.type] = plugin_weights[plugin.type]
+        else:
+            if plugin.type not in _warned_unknown_plugins:
+                logger.warning(
+                    "No weight configured for plugin %r in scoring.weights.plugins; defaulting to 1.0",
+                    plugin.type,
+                )
+                _warned_unknown_plugins.add(plugin.type)
+            weights[plugin.type] = 1.0
+    return weights
 
 
 def _avg_hour_from_forecasts(

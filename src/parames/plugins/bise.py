@@ -14,7 +14,6 @@ from parames.plugins.base import PluginConfigBase, register_plugin
 class BisePluginConfig(PluginConfigBase):
     type: Literal["bise"] = "bise"
     east_minus_west_pressure_hpa_min: float = Field(default=1.5, ge=0)
-    boost_if_bise: bool = True
     pressure_reference_west: LocationConfig
     pressure_reference_east: LocationConfig
 
@@ -32,7 +31,14 @@ class BisePrefetched:
 
 @register_plugin
 class BisePlugin:
-    """East-minus-West pressure gradient. Applies a +1/+2 score boost."""
+    """East-minus-West pressure gradient — corroboration signal.
+
+    Returns a sub-score in [0, 100] when the pressure gradient confirms a Bise
+    pattern, or `None` to opt out (no positive corroboration, missing data, or
+    incomplete window). Opting out means Bise is excluded from both numerator
+    and denominator of the weighted-mean composite — a windless dry day is
+    not penalised for "no Bise gradient".
+    """
 
     type: ClassVar[str] = "bise"
 
@@ -65,7 +71,7 @@ class BisePlugin:
         window_times: list[datetime],
         prefetched: BisePrefetched,
         contributing_models: list[str],
-    ) -> tuple[int, dict[str, Any]]:
+    ) -> tuple[float | None, dict[str, Any]]:
         gradients: list[float] = []
         for timestamp in window_times:
             per_model: list[float] = []
@@ -84,13 +90,15 @@ class BisePlugin:
                 gradients.append(sum(per_model) / len(per_model))
 
         if len(gradients) != len(window_times) or not gradients:
-            return 0, {}
+            return None, {}
 
         gradient = sum(gradients) / len(gradients)
-        boost = 0
-        if self.config.boost_if_bise:
-            if gradient >= 3.0:
-                boost = 2
-            elif gradient >= self.config.east_minus_west_pressure_hpa_min:
-                boost = 1
-        return boost, {"gradient_hpa": gradient}
+        # Always emit the gradient for display, even when corroboration is absent.
+        output = {"gradient_hpa": gradient}
+
+        if gradient >= 3.0:
+            return 100.0, output
+        if gradient >= self.config.east_minus_west_pressure_hpa_min:
+            return 75.0, output
+        # Below threshold — gradient is real but not corroborating. Opt out.
+        return None, output

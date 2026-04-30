@@ -71,13 +71,27 @@ class ConsoleChannel:
         for window in windows:
             classification = window.classification.upper()
             score = window.score
-            score_style = "bold green" if score >= 5 else "bold yellow"
-            medal = "🟢" if score >= 5 else "🟡"
+            if score is None:
+                score_style = "dim"
+                medal = "⚪"
+                score_str = "unavailable"
+            elif score >= 85:
+                score_style = "bold magenta"
+                medal = "🌟"
+                score_str = str(score)
+            elif score >= 70:
+                score_style = "bold green"
+                medal = "🟢"
+                score_str = str(score)
+            else:
+                score_style = "bold yellow"
+                medal = "🟡"
+                score_str = str(score)
             self._console.print(f"{medal} [bold]{classification}[/bold]", style=score_style)
             self._console.print(
                 f"  📅 {window.start:%a %Y-%m-%d %H:%M} – {window.end:%H:%M}  "
                 f"⏱ {window.duration_hours}h  "
-                f"⭐ Score: {score}/7"
+                f"⭐ Score: {score_str}"
             )
             self._console.print(
                 f"  💨 avg {window.avg_wind_speed_kmh:.1f} km/h, "

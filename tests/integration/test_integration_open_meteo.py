@@ -50,6 +50,6 @@ def test_evaluate_end_to_end_with_live_api(default_config) -> None:
 
     assert isinstance(windows, list)
     for window in windows:
-        assert 0 <= window.score <= 7
+        assert window.score is None or 0 <= window.score <= 100
         assert window.start < window.end
-        assert window.classification in {"weak", "candidate", "strong"}
+        assert window.classification in {"weak", "candidate", "strong", "excellent", "unavailable"}

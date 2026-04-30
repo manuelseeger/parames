@@ -24,6 +24,7 @@ function fmtTime(iso) {
 }
 
 function classificationPill(c) {
+  if (c === 'excellent') return 'pill-excellent';
   if (c === 'strong') return 'pill-ok';
   if (c === 'candidate') return 'pill-warn';
   return 'pill-muted';
@@ -192,7 +193,7 @@ const hourlyArrows = computed(() => {
         </svg>
         <h1 class="detection-detail-name">{{ detection.alert_name }}</h1>
         <span class="pill" :class="classificationPill(detection.classification)">{{ detection.classification }}</span>
-        <span class="muted" style="font-size:13px">Score {{ detection.score }}</span>
+        <span class="muted" style="font-size:13px">Score {{ detection.score ?? 'unavailable' }}</span>
         <span v-if="detection.seen_count > 1" class="muted" style="font-size:13px">· seen {{ detection.seen_count }}×</span>
       </div>
       <div style="margin-bottom:20px; color:#52606d; font-size:13px">

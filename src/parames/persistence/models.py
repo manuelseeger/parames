@@ -71,7 +71,9 @@ class Detection(DbModel):
     local_date: str
     start: datetime
     end: datetime
-    score: int
+    # 0–100 weighted-mean composite, or None when every signal opted out.
+    score: int | None
+    # weak / candidate / strong / excellent / unavailable
     classification: str
     first_seen_run_id: Id
     last_seen_run_id: Id

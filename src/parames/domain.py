@@ -37,12 +37,21 @@ class CandidateWindow(MainBaseModel):
     max_precipitation_mm_per_hour: float | None = None
     models: list[str]
     dry_filter_applied: bool
-    score: int
+    # 0–100 weighted-mean composite. None when every signal opts out.
+    score: int | None
+    # weak / candidate / strong / excellent / unavailable
     classification: str
+    # Per-signal sub-scores (0–100) that fed the composite. None entries opted out.
+    subscores: dict[str, float | None] = {}
     hours: list[WindowHour] = []
     plugin_outputs: dict[str, dict[str, Any]] = {}
 
     @field_validator("plugin_outputs", mode="before")
     @classmethod
     def _none_to_empty_dict(cls, v):
+        return v if v is not None else {}
+
+    @field_validator("subscores", mode="before")
+    @classmethod
+    def _subscores_none_to_empty(cls, v):
         return v if v is not None else {}

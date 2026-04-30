@@ -116,24 +116,67 @@ def test_build_candidate_windows_filters_short_runs(default_config, fixed_now) -
     assert windows[0].duration_hours == 2
 
 
-def test_score_window_classification_boundaries(default_config, fixed_now) -> None:
-    profile = default_config.alerts[0].model_copy(update={"dry": None, "plugins": []})
-    hours = [
+def _hours(fixed_now, *, count: int, speed: float):
+    return [
         EvaluatedHour(
             time=fixed_now + timedelta(hours=index),
-            avg_wind_speed_kmh=10.5,
-            max_wind_speed_kmh=11.0,
+            avg_wind_speed_kmh=speed,
+            max_wind_speed_kmh=speed + 0.5,
             avg_direction_deg=60.0,
             models=("icon_ch2", "icon_d2"),
-            avg_precipitation_mm_per_hour=0.1,
+            avg_precipitation_mm_per_hour=0.0,
         )
-        for index in range(4)
+        for index in range(count)
     ]
 
-    window = score_window(profile, hours)
-    # speed 10.5 >= min 10.0 but < strong 12.0 → +1; 4 hours → +2; no plugins → total 3
-    assert window.score == 3
-    assert window.classification == "candidate"
+
+@pytest.mark.parametrize(
+    "speed,count,expected_classification",
+    [
+        # wind_speed sub-score: min=10, strong=12, upper=15.6
+        # wind_duration sub-score: 0 if <2, 50 at 2, 75 at 3, 100 at 4+
+        (10.0, 2, "weak"),       # speed=0 + dur=50 → 25
+        (10.5, 4, "candidate"),  # speed≈9 + dur=100 → 54
+        (13.0, 4, "strong"),     # speed≈54 + dur=100 → 77
+        (16.0, 4, "excellent"),  # speed=100 (clamped) + dur=100 → 100
+    ],
+)
+def test_score_window_tier_boundaries(default_config, fixed_now, speed, count, expected_classification) -> None:
+    profile = default_config.alerts[0].model_copy(update={"dry": None, "plugins": []})
+    window = score_window(profile, _hours(fixed_now, count=count, speed=speed))
+    assert window.classification == expected_classification
+
+
+def test_score_window_returns_unavailable_when_all_signals_opt_out(default_config, fixed_now) -> None:
+    """An aggregator with zero-weight built-ins and no plugins yields score=None."""
+    from parames.config import ScoringConfig, ScoringWeightsConfig
+
+    profile = default_config.alerts[0].model_copy(update={"dry": None, "plugins": []})
+    scoring = ScoringConfig(weights=ScoringWeightsConfig(wind_speed=0.0, wind_duration=0.0, plugins={}))
+    window = score_window(profile, _hours(fixed_now, count=4, speed=11.0), scoring=scoring)
+    assert window.score is None
+    assert window.classification == "unavailable"
+
+
+def test_score_window_renormalizes_when_plugin_opts_out(default_config, fixed_now) -> None:
+    """A plugin that returns None is excluded from both numerator and denominator."""
+    from typing import Any
+
+    profile = default_config.alerts[0].model_copy(update={"dry": None, "plugins": []})
+    hours = _hours(fixed_now, count=4, speed=11.0)
+
+    class _NoneBisePlugin:
+        type = "bise"
+        enabled = True
+        def prefetch(self, **_): return None
+        def score_window(self, **_) -> tuple[float | None, dict[str, Any]]:
+            return None, {}
+
+    baseline = score_window(profile, hours)
+    with_opt_out = score_window(profile, hours, plugins=[_NoneBisePlugin()])
+    # Plugin opting out doesn't move the score — same as baseline.
+    assert baseline.score == with_opt_out.score
+    assert with_opt_out.subscores["bise"] is None
 
 
 def test_evaluate_positive_snapshot_replays_expected_window(default_config) -> None:
