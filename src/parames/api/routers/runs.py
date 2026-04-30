@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from parames.api.deps import Repo
-from parames.cli import _run
+from parames.runner import run
 from parames.config import RuntimeSettings
 from parames.persistence.models import Run
 
@@ -27,5 +27,5 @@ async def get_run(run_id: str, repo: Repo) -> Run:
 async def trigger_run(background_tasks: BackgroundTasks) -> dict:
     """Start a run immediately in the background."""
     settings = RuntimeSettings()
-    background_tasks.add_task(_run, settings.config_path)
+    background_tasks.add_task(run, settings.config_path)
     return {"message": "Run started"}
