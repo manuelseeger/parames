@@ -11,6 +11,13 @@ from parames.persistence import AlertRepository, build_engine
 from parames.api.routers import alert_definitions, detections, deliveries, health, runs
 
 
+class NoCacheStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        response.headers["cache-control"] = "no-store, no-cache, must-revalidate"
+        return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = RuntimeSettings()
@@ -35,6 +42,8 @@ app.include_router(detections.router, prefix="/api")
 app.include_router(runs.router, prefix="/api")
 app.include_router(deliveries.router, prefix="/api")
 
-WEBAPP_DIR = Path(__file__).resolve().parents[3] / "webapp"
+settings = RuntimeSettings()
+WEBAPP_DIR = Path(__file__).resolve().parents[3] / "webapp" / "dist"
 if WEBAPP_DIR.is_dir():
-    app.mount("/", StaticFiles(directory=WEBAPP_DIR, html=True), name="webapp")
+    static_cls = NoCacheStaticFiles if settings.dev_mode else StaticFiles
+    app.mount("/", static_cls(directory=WEBAPP_DIR, html=True), name="webapp")
