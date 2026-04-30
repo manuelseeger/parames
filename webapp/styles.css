@@ -227,6 +227,7 @@ code, pre, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size
   border-radius: 4px;
   font-size: 13px;
   margin-bottom: 12px;
+  white-space: pre-line;
 }
 
 .spinner {

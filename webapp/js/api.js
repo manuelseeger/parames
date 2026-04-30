@@ -6,9 +6,20 @@ async function request(path, opts = {}) {
     ...opts,
   });
   if (!res.ok) {
-    let detail;
-    try { detail = (await res.json()).detail; } catch { detail = await res.text(); }
-    throw new Error(detail || `${res.status} ${res.statusText}`);
+    let message;
+    try {
+      const detail = (await res.json()).detail;
+      if (Array.isArray(detail)) {
+        message = detail
+          .map(e => `${e.loc.slice(1).join('.')}: ${e.msg}`)
+          .join('\n');
+      } else {
+        message = detail;
+      }
+    } catch {
+      message = await res.text();
+    }
+    throw new Error(message || `${res.status} ${res.statusText}`);
   }
   if (res.status === 204) return null;
   return res.json();
