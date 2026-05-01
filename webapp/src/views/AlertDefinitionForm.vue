@@ -24,7 +24,7 @@ function emptyDefinition() {
     },
     wind: {
       min_speed_kmh: 10,
-      strong_speed_kmh: 12,
+      strong_speed_kmh: null,
       direction_min_deg: 0,
       direction_max_deg: 360,
       min_consecutive_hours: 2,
@@ -113,6 +113,10 @@ async function submit() {
     delete payload._id;
     delete payload.created_at;
     delete payload.updated_at;
+    const s = payload.wind.strong_speed_kmh;
+    if (s === '' || s === null || s === undefined || (typeof s === 'number' && isNaN(s))) {
+      payload.wind.strong_speed_kmh = null;
+    }
 
     if (isEdit.value) {
       await api.updateAlertDefinition(props.id, payload);
@@ -190,8 +194,8 @@ function cancel() { navigate('/alerts'); }
             <input type="number" step="any" v-model.number="def.wind.min_speed_kmh" required>
           </div>
           <div class="field">
-            <label>Strong speed (km/h)</label>
-            <input type="number" step="any" v-model.number="def.wind.strong_speed_kmh" required>
+            <label>Strong speed (km/h) <span class="muted">(optional)</span></label>
+            <input type="number" step="any" v-model.number="def.wind.strong_speed_kmh" placeholder="use global default">
           </div>
           <div class="field">
             <label>Min consecutive hours</label>
@@ -208,7 +212,7 @@ function cancel() { navigate('/alerts'); }
             <input type="number" min="0" max="360" step="1" v-model.number="def.wind.direction_max_deg" required>
           </div>
         </div>
-        <div class="field-help">Direction range 0–360: use 0–360 or 0–0 for any direction. Wrap-around supported (e.g. 330–30 for N).</div>
+        <div class="field-help">Use 0–360 for any direction. Wrap-around supported (e.g. 330–30 for N).</div>
       </section>
 
       <section class="card">
