@@ -13,7 +13,12 @@ def test_mainz_finthen_weak_forecast(default_config) -> None:
     snapshot_client = SnapshotForecastClient(FIXTURE_DIR)
 
     try:
-        windows = evaluate(profile, client=snapshot_client, now=snapshot_client.captured_at, scoring=default_config.scoring)
+        windows = evaluate(
+            profile,
+            client=snapshot_client,
+            now=snapshot_client.captured_at,
+            scoring=default_config.scoring,
+        )
     finally:
         snapshot_client.close()
 
@@ -27,5 +32,7 @@ def test_mainz_finthen_weak_forecast(default_config) -> None:
     assert window.score == expected["score"]
 
     strong_min = default_config.scoring.tiers.strong_min
-    assert window.score < strong_min, f"Expected weak forecast (score < {strong_min}), got {window.score}"
+    assert window.score < strong_min, (
+        f"Expected weak forecast (score < {strong_min}), got {window.score}"
+    )
     assert window.classification == "weak"

@@ -9,7 +9,14 @@ from zoneinfo import ZoneInfo
 
 import logging
 
-from parames.config import AlertProfileConfig, DryConfig, ModelAgreementConfig, ScoringConfig, TimeWindowConfig, WindConfig
+from parames.config import (
+    AlertProfileConfig,
+    DryConfig,
+    ModelAgreementConfig,
+    ScoringConfig,
+    TimeWindowConfig,
+    WindConfig,
+)
 from parames.domain import CandidateWindow, Classification, HourForecast, WindowHour
 from parames.forecast import ForecastClient, OpenMeteoForecastClient, ZURICH_TIMEZONE
 from parames.plugins import EvaluationPlugin, build_plugins
@@ -61,7 +68,9 @@ def evaluate_hour_candidate(
     time_window: TimeWindowConfig | None,
     dry: DryConfig | None,
 ) -> bool:
-    if time_window is not None and not (time_window.start_hour <= hour.time.hour < time_window.end_hour):
+    if time_window is not None and not (
+        time_window.start_hour <= hour.time.hour < time_window.end_hour
+    ):
         return False
     if hour.wind_speed is None or hour.wind_speed < wind.min_speed_kmh:
         return False
@@ -86,13 +95,17 @@ def evaluate(
         or profile.wind.min_speed_kmh is None
         or profile.wind.strong_speed_kmh is None
     ):
-        raise ValueError("Alert profile must be resolved with defaults before evaluation")
+        raise ValueError(
+            "Alert profile must be resolved with defaults before evaluation"
+        )
 
     active_client = client or OpenMeteoForecastClient()
     should_close = client is None
     effective_scoring = scoring if scoring is not None else ScoringConfig()
     try:
-        return _evaluate_with_client(profile, active_client, now=now, scoring=effective_scoring)
+        return _evaluate_with_client(
+            profile, active_client, now=now, scoring=effective_scoring
+        )
     finally:
         if should_close:
             active_client.close()
@@ -125,10 +138,13 @@ def _evaluate_with_client(
 
     plugins = [p for p in build_plugins(profile.plugins) if p.enabled]
     plugin_data: dict[str, Any] = {
-        plugin.type: plugin.prefetch(client=client, models=profile.models) for plugin in plugins
+        plugin.type: plugin.prefetch(client=client, models=profile.models)
+        for plugin in plugins
     }
 
-    timestamps = sorted({timestamp for forecasts in model_forecasts.values() for timestamp in forecasts})
+    timestamps = sorted(
+        {timestamp for forecasts in model_forecasts.values() for timestamp in forecasts}
+    )
     accepted_hours: list[EvaluatedHour] = []
     for timestamp in timestamps:
         if timestamp < current_time or timestamp > horizon_end:
@@ -142,10 +158,15 @@ def _evaluate_with_client(
             accepted_hours.append(evaluated)
 
     windows = build_candidate_windows(
-        profile, accepted_hours, plugins=plugins, plugin_data=plugin_data, scoring=scoring
+        profile,
+        accepted_hours,
+        plugins=plugins,
+        plugin_data=plugin_data,
+        scoring=scoring,
     )
     scored = [
-        window for window in windows
+        window
+        for window in windows
         if window.score is not None and window.score >= scoring.emit_threshold
     ]
     _attach_context_hours(scored, model_forecasts)
@@ -163,7 +184,9 @@ def _evaluate_timestamp(
         hour = forecast_by_time.get(timestamp)
         if hour is None:
             continue
-        if evaluate_hour_candidate(hour, wind=profile.wind, time_window=profile.time_window, dry=profile.dry):
+        if evaluate_hour_candidate(
+            hour, wind=profile.wind, time_window=profile.time_window, dry=profile.dry
+        ):
             matching[model] = hour
 
     agreement = profile.model_agreement
@@ -173,9 +196,19 @@ def _evaluate_timestamp(
     if agreement.required and not models_agree(list(matching.values()), agreement):
         return None
 
-    directions = [hour.wind_direction for hour in matching.values() if hour.wind_direction is not None]
-    speeds = [hour.wind_speed for hour in matching.values() if hour.wind_speed is not None]
-    precipitations = [hour.precipitation for hour in matching.values() if hour.precipitation is not None]
+    directions = [
+        hour.wind_direction
+        for hour in matching.values()
+        if hour.wind_direction is not None
+    ]
+    speeds = [
+        hour.wind_speed for hour in matching.values() if hour.wind_speed is not None
+    ]
+    precipitations = [
+        hour.precipitation
+        for hour in matching.values()
+        if hour.precipitation is not None
+    ]
     if not directions or not speeds:
         return None
     return EvaluatedHour(
@@ -184,7 +217,9 @@ def _evaluate_timestamp(
         max_wind_speed_kmh=max(speeds),
         avg_direction_deg=vector_average_direction(directions),
         models=tuple(sorted(matching)),
-        avg_precipitation_mm_per_hour=(sum(precipitations) / len(precipitations)) if precipitations else None,
+        avg_precipitation_mm_per_hour=(sum(precipitations) / len(precipitations))
+        if precipitations
+        else None,
     )
 
 
@@ -194,7 +229,10 @@ def models_agree(hours: list[HourForecast], agreement: ModelAgreementConfig) -> 
             return False
         if left.wind_speed is None or right.wind_speed is None:
             return False
-        if angular_distance(left.wind_direction, right.wind_direction) > agreement.max_direction_delta_deg:
+        if (
+            angular_distance(left.wind_direction, right.wind_direction)
+            > agreement.max_direction_delta_deg
+        ):
             return False
         if abs(left.wind_speed - right.wind_speed) > agreement.max_speed_delta_kmh:
             return False
@@ -305,9 +343,15 @@ def score_window(
     avg_speed = sum(hour.avg_wind_speed_kmh for hour in hours) / len(hours)
     max_speed = max(hour.max_wind_speed_kmh for hour in hours)
     avg_direction = vector_average_direction([hour.avg_direction_deg for hour in hours])
-    precipitation_values = [hour.avg_precipitation_mm_per_hour for hour in hours if hour.avg_precipitation_mm_per_hour is not None]
+    precipitation_values = [
+        hour.avg_precipitation_mm_per_hour
+        for hour in hours
+        if hour.avg_precipitation_mm_per_hour is not None
+    ]
     avg_precipitation = (
-        sum(precipitation_values) / len(precipitation_values) if len(precipitation_values) == len(hours) else None
+        sum(precipitation_values) / len(precipitation_values)
+        if len(precipitation_values) == len(hours)
+        else None
     )
     max_precipitation = max(precipitation_values) if precipitation_values else None
 
@@ -404,8 +448,14 @@ def _avg_hour_from_forecasts(
             precipitations.append(hour.precipitation)
     if not speeds:
         return None
-    avg_precipitation = sum(precipitations) / len(precipitations) if precipitations else None
-    return sum(speeds) / len(speeds), vector_average_direction(directions), avg_precipitation
+    avg_precipitation = (
+        sum(precipitations) / len(precipitations) if precipitations else None
+    )
+    return (
+        sum(speeds) / len(speeds),
+        vector_average_direction(directions),
+        avg_precipitation,
+    )
 
 
 def _attach_context_hours(
