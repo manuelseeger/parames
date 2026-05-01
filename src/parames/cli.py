@@ -5,6 +5,7 @@ from pathlib import Path
 
 import click
 
+from parames.capture import capture_command
 from parames.forecast import ForecastClientError
 from parames.runner import default_config_path, run
 from parames.seed import seed_command
@@ -33,6 +34,7 @@ def run_command(config_path: Path) -> None:
 
 
 main.add_command(seed_command)
+main.add_command(capture_command)
 
 
 if __name__ == "__main__":
