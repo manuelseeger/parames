@@ -18,6 +18,7 @@
             "env": {
                 "PARAMES_DEV_MODE": "true"
             },
+            "preLaunchTask": "Build frontend",
             "jinja": true
         }
     ]
