@@ -133,12 +133,12 @@ def _hours(fixed_now, *, count: int, speed: float):
 @pytest.mark.parametrize(
     "speed,count,expected_classification",
     [
-        # wind_speed sub-score: min=10, strong=12, upper=15.6
+        # wind_speed sub-score: tent(min=10, strong=28, peak=19)
         # wind_duration sub-score: 0 if <2, 50 at 2, 75 at 3, 100 at 4+
-        (10.0, 2, "weak"),       # speed=0 + dur=50 → 25
-        (10.5, 4, "candidate"),  # speed≈9 + dur=100 → 54
-        (13.0, 4, "strong"),     # speed≈54 + dur=100 → 77
-        (16.0, 4, "excellent"),  # speed=100 (clamped) + dur=100 → 100
+        (10.0, 2, "weak"),       # speed=0, dur=50 → 25
+        (12.0, 4, "candidate"),  # speed≈22, dur=100 → 61
+        (16.0, 4, "strong"),     # speed≈67, dur=100 → 83
+        (19.0, 4, "excellent"),  # speed=100, dur=100 → 100
     ],
 )
 def test_score_window_tier_boundaries(default_config, fixed_now, speed, count, expected_classification) -> None:
@@ -180,12 +180,12 @@ def test_score_window_renormalizes_when_plugin_opts_out(default_config, fixed_no
 
 
 def test_evaluate_positive_snapshot_replays_expected_window(default_config) -> None:
-    profile = default_config.alerts[0]
+    profile = next(a for a in default_config.alerts if a.name == "zurich_bise")
     snapshot_client = SnapshotForecastClient(FIXTURE_DIR)
     now = snapshot_client.captured_at
 
     try:
-        windows = evaluate(profile, client=snapshot_client, now=now)
+        windows = evaluate(profile, client=snapshot_client, now=now, scoring=default_config.scoring)
     finally:
         snapshot_client.close()
 

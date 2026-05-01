@@ -139,8 +139,8 @@
         "meteoswiss_icon_ch2"
       ],
       "dry_filter_applied": false,
-      "score": 100,
-      "classification": "excellent",
+      "score": 79,
+      "classification": "strong",
       "hours": [
         {
           "time": "2026-04-29T09:00:00+02:00",
