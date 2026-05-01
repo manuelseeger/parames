@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Any
 
 from pyodmongo import MainBaseModel
 from pydantic import field_validator
+
+
+class Classification(StrEnum):
+    weak = "weak"
+    candidate = "candidate"
+    strong = "strong"
+    excellent = "excellent"
+    unavailable = "unavailable"
 
 
 class WindowHour(MainBaseModel):
@@ -39,8 +48,7 @@ class CandidateWindow(MainBaseModel):
     dry_filter_applied: bool
     # 0–100 weighted-mean composite. None when every signal opts out.
     score: int | None
-    # weak / candidate / strong / excellent / unavailable
-    classification: str
+    classification: Classification
     # Per-signal sub-scores (0–100) that fed the composite. None entries opted out.
     subscores: dict[str, float | None] = {}
     hours: list[WindowHour] = []

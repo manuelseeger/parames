@@ -3,12 +3,13 @@ from __future__ import annotations
 import ssl
 from collections.abc import Iterable
 from datetime import datetime
+from typing import Protocol
 from zoneinfo import ZoneInfo
 
 import certifi
 import httpx
 
-from parames.config import LocationConfig
+from parames.common import LocationConfig
 from parames.domain import HourForecast
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
@@ -17,6 +18,20 @@ LEGACY_MODEL_ALIASES = {
     "icon_ch1": "meteoswiss_icon_ch1",
     "icon_ch2": "meteoswiss_icon_ch2",
 }
+
+
+class ForecastClient(Protocol):
+    def fetch_hourly_forecast(
+        self,
+        *,
+        location: LocationConfig,
+        model: str,
+        hourly_variables: Iterable[str],
+        forecast_days: int = 3,
+        timezone: str = ZURICH_TIMEZONE,
+    ) -> dict[datetime, HourForecast]: ...
+
+    def close(self) -> None: ...
 
 
 def _create_default_ssl_context() -> ssl.SSLContext:

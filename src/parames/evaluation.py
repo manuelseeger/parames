@@ -10,8 +10,8 @@ from zoneinfo import ZoneInfo
 import logging
 
 from parames.config import AlertProfileConfig, DryConfig, ModelAgreementConfig, ScoringConfig, TimeWindowConfig, WindConfig
-from parames.domain import CandidateWindow, HourForecast, WindowHour
-from parames.forecast import OpenMeteoForecastClient, ZURICH_TIMEZONE
+from parames.domain import CandidateWindow, Classification, HourForecast, WindowHour
+from parames.forecast import ForecastClient, OpenMeteoForecastClient, ZURICH_TIMEZONE
 from parames.plugins import EvaluationPlugin, build_plugins
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,8 @@ class EvaluatedHour:
 
 
 def direction_in_range(direction: float, min_deg: float, max_deg: float) -> bool:
+    if max_deg - min_deg >= 360:
+        return True
     direction = direction % 360
     min_deg = min_deg % 360
     max_deg = max_deg % 360
@@ -73,11 +75,17 @@ def evaluate_hour_candidate(
 def evaluate(
     profile: AlertProfileConfig,
     *,
-    client: OpenMeteoForecastClient | None = None,
+    client: ForecastClient | None = None,
     now: datetime | None = None,
     scoring: ScoringConfig | None = None,
 ) -> list[CandidateWindow]:
-    if profile.forecast_hours is None or profile.wind_level_m is None or profile.model_agreement is None:
+    if (
+        profile.forecast_hours is None
+        or profile.wind_level_m is None
+        or profile.model_agreement is None
+        or profile.wind.min_speed_kmh is None
+        or profile.wind.strong_speed_kmh is None
+    ):
         raise ValueError("Alert profile must be resolved with defaults before evaluation")
 
     active_client = client or OpenMeteoForecastClient()
@@ -92,7 +100,7 @@ def evaluate(
 
 def _evaluate_with_client(
     profile: AlertProfileConfig,
-    client: OpenMeteoForecastClient,
+    client: ForecastClient,
     *,
     now: datetime | None,
     scoring: ScoringConfig,
@@ -226,14 +234,15 @@ def build_candidate_windows(
 
 
 def _subscore_wind_speed(avg_speed_kmh: float, wind: WindConfig) -> float:
-    """Linear ramp 0..100. 0 at min_speed, 100 at strong_speed × 1.3 (clamped)."""
-    if avg_speed_kmh < wind.min_speed_kmh:
+    """Tent: 0 at min and strong, peaks 100 at midpoint. Models 'ideal is between min needed and max tolerable'."""
+    lo = wind.min_speed_kmh
+    hi = wind.strong_speed_kmh
+    if lo is None or hi is None or avg_speed_kmh <= lo or avg_speed_kmh >= hi:
         return 0.0
-    upper = wind.strong_speed_kmh * 1.3
-    if upper <= wind.min_speed_kmh:
-        return 100.0
-    fraction = (avg_speed_kmh - wind.min_speed_kmh) / (upper - wind.min_speed_kmh)
-    return max(0.0, min(100.0, fraction * 100.0))
+    peak = (lo + hi) / 2.0
+    if avg_speed_kmh <= peak:
+        return (avg_speed_kmh - lo) / (peak - lo) * 100.0
+    return (hi - avg_speed_kmh) / (hi - peak) * 100.0
 
 
 def _subscore_wind_duration(duration_hours: int, wind: WindConfig) -> float:
@@ -249,16 +258,16 @@ def _subscore_wind_duration(duration_hours: int, wind: WindConfig) -> float:
     return 50.0 + (extra / span) * 50.0
 
 
-def _classify(score: int | None, tiers) -> str:
+def _classify(score: int | None, tiers) -> Classification:
     if score is None:
-        return "unavailable"
+        return Classification.unavailable
     if score >= tiers.excellent_min:
-        return "excellent"
+        return Classification.excellent
     if score >= tiers.strong_min:
-        return "strong"
+        return Classification.strong
     if score >= tiers.candidate_min:
-        return "candidate"
-    return "weak"
+        return Classification.candidate
+    return Classification.weak
 
 
 def _aggregate_subscores(

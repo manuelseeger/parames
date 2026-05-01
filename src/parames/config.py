@@ -30,6 +30,7 @@ __all__ = [
     "ScoringWeightsConfig",
     "TimeWindowConfig",
     "WindConfig",
+    "WindDefaultsConfig",
     "definition_to_profile",
     "load_app_config",
     "resolve_profile_defaults",
@@ -43,17 +44,23 @@ class ModelAgreementConfig(MainBaseModel):
     max_speed_delta_kmh: float = Field(default=8.0, ge=0)
 
 
+class WindDefaultsConfig(BaseModel):
+    min_speed_kmh: float = Field(default=10.0, ge=0)
+    strong_speed_kmh: float = Field(default=28.0, ge=0)
+
+
 class DefaultsConfig(BaseModel):
     forecast_hours: int = Field(default=48, ge=1, le=72)
     wind_level_m: int = Field(default=10, ge=1)
     model_agreement: ModelAgreementConfig = Field(default_factory=ModelAgreementConfig)
+    wind: WindDefaultsConfig = Field(default_factory=WindDefaultsConfig)
 
 
 class WindConfig(MainBaseModel):
-    min_speed_kmh: float = Field(ge=0)
-    strong_speed_kmh: float = Field(ge=0)
+    min_speed_kmh: float | None = Field(default=None, ge=0)
+    strong_speed_kmh: float | None = Field(default=None, ge=0)
     direction_min_deg: float = Field(ge=0, lt=360)
-    direction_max_deg: float = Field(ge=0, lt=360)
+    direction_max_deg: float = Field(ge=0, le=360)
     min_consecutive_hours: int = Field(default=2, ge=1)
 
 
@@ -195,11 +202,16 @@ def definition_to_profile(definition: object) -> "AlertProfileConfig":
 def resolve_profile_defaults(
     profile: AlertProfileConfig, defaults: DefaultsConfig
 ) -> AlertProfileConfig:
+    resolved_wind = profile.wind.model_copy(update={
+        "min_speed_kmh": profile.wind.min_speed_kmh if profile.wind.min_speed_kmh is not None else defaults.wind.min_speed_kmh,
+        "strong_speed_kmh": profile.wind.strong_speed_kmh if profile.wind.strong_speed_kmh is not None else defaults.wind.strong_speed_kmh,
+    })
     return profile.model_copy(
         update={
             "forecast_hours": profile.forecast_hours or defaults.forecast_hours,
             "wind_level_m": profile.wind_level_m or defaults.wind_level_m,
             "model_agreement": profile.model_agreement or defaults.model_agreement,
+            "wind": resolved_wind,
         }
     )
 

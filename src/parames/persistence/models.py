@@ -13,7 +13,7 @@ from parames.config import (
     TimeWindowConfig,
     WindConfig,
 )
-from parames.domain import CandidateWindow
+from parames.domain import CandidateWindow, Classification
 from parames.plugins.schemas import PluginConfig
 
 RunStatus = Literal["running", "completed", "failed"]
@@ -73,8 +73,7 @@ class Detection(DbModel):
     end: datetime
     # 0–100 weighted-mean composite, or None when every signal opted out.
     score: int | None
-    # weak / candidate / strong / excellent / unavailable
-    classification: str
+    classification: Classification
     first_seen_run_id: Id
     last_seen_run_id: Id
     seen_count: int = 1

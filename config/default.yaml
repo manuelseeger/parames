@@ -6,20 +6,45 @@ defaults:
     min_models_matching: 2
     max_direction_delta_deg: 35
     max_speed_delta_kmh: 8.0
+  wind:
+    min_speed_kmh: 10.0
+    strong_speed_kmh: 28.0
 
 scoring:
   weights:
-    wind_speed: 1.0
+    wind_speed: 2.0
     wind_duration: 1.0
     plugins:
       bise: 0.5
   emit_threshold: 40
   tiers:
-    candidate_min: 40
+    candidate_min: 50
     strong_min: 70
     excellent_min: 85
 
 alerts:
+  - name: mainz_finthen
+    description: "NE/E wind for ground handling - Mainz Finthen"
+    location:
+      name: mainz_finthen
+      latitude: 49.984
+      longitude: 8.274
+    models:
+      - icon_d2
+      - ecmwf_ifs
+    wind:
+      direction_min_deg: 0
+      direction_max_deg: 359
+      min_consecutive_hours: 2
+    time_window:
+      start_hour: 8
+      end_hour: 20
+    dry:
+      enabled: true
+      max_precipitation_mm_per_hour: 0.2
+    delivery:
+      - console
+
   - name: zurich_bise
     description: "NE/E wind for ground handling - Zurich Allmend"
     location:
@@ -31,8 +56,6 @@ alerts:
       - icon_d2
       - ecmwf_ifs
     wind:
-      min_speed_kmh: 10.0
-      strong_speed_kmh: 12.0
       direction_min_deg: 30
       direction_max_deg: 100
       min_consecutive_hours: 2
@@ -56,7 +79,6 @@ alerts:
           longitude: 9.287
     delivery:
       - console
-      - telegram
 
 delivery_channels:
   console:
