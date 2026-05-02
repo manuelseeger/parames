@@ -17,9 +17,9 @@ scoring:
     plugins:
       bise: 0.5
       laminar: 1.0
-  emit_threshold: 40
+  emit_threshold: 50
   tiers:
-    candidate_min: 50
+    candidate_min: 60
     strong_min: 70
     excellent_min: 85
 
@@ -32,6 +32,7 @@ alerts:
       longitude: 8.274
     models:
       - icon_d2
+      - icon_eu
       - ecmwf_ifs
     wind:
       direction_min_deg: 0
@@ -57,7 +58,7 @@ alerts:
       longitude: 8.509
     models:
       - meteoswiss_icon_ch2
-      - icon_d2
+      - icon_eu 
       - ecmwf_ifs
     wind:
       direction_min_deg: 30

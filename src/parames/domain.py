@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pyodmongo import MainBaseModel
 from pydantic import field_validator
@@ -35,6 +35,70 @@ class HourForecast(MainBaseModel):
     wind_gusts: float | None = None
     cape: float | None = None
     showers: float | None = None
+
+
+class RuleEvaluation(MainBaseModel):
+    name: str
+    observed: Any
+    threshold: Any | None = None
+    outcome: Literal["pass", "warn", "fail", "info"]
+    delta: float | None = None
+    message: str | None = None
+
+
+class HourEvaluation(MainBaseModel):
+    time: datetime
+    accepted: bool
+    matching_models: list[str] = []
+    rejection_reasons: list[str] = []
+    rules: list[RuleEvaluation] = []
+
+
+class ScoringTrace(MainBaseModel):
+    weights: dict[str, float]
+    subscores: dict[str, float | None]
+    contributions: dict[str, dict[str, Any]]
+    weight_total: float
+    weighted_sum: float
+    raw_score: float | None
+    final_score: int | None
+    classification: Classification
+    tiers: dict[str, int]
+
+
+class PluginReport(MainBaseModel):
+    type: str
+    schema_version: int = 1
+    summary: str | None = None
+    config_snapshot: dict[str, Any] = {}
+    inputs: dict[str, Any] = {}
+    metrics: dict[str, Any] = {}
+    hourly: list[dict[str, Any]] = []
+    rules: list[RuleEvaluation] = []
+    notes: list[str] = []
+
+
+class ModelHourForecast(MainBaseModel):
+    time: datetime
+    wind_speed: float | None = None
+    wind_direction: float | None = None
+    wind_gusts: float | None = None
+    precipitation: float | None = None
+    pressure_msl: float | None = None
+    cape: float | None = None
+    showers: float | None = None
+
+
+class EvaluationReport(MainBaseModel):
+    schema_version: int = 1
+    profile_snapshot: dict[str, Any]
+    horizon_start: datetime
+    horizon_end: datetime
+    forecast_models: list[str]
+    hour_evaluations: list[HourEvaluation] = []
+    raw_forecasts: dict[str, list[ModelHourForecast]] = {}
+    scoring: ScoringTrace
+    plugin_reports: dict[str, PluginReport] = {}
 
 
 class CandidateWindow(MainBaseModel):
