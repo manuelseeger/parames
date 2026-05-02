@@ -13,7 +13,7 @@ defaults:
 scoring:
   weights:
     wind_speed: 2.0
-    wind_duration: 1.0
+    wind_duration: 0.5
     plugins:
       bise: 0.5
       laminar: 1.0
@@ -36,7 +36,7 @@ alerts:
     wind:
       direction_min_deg: 0
       direction_max_deg: 359
-      min_consecutive_hours: 2
+      min_consecutive_hours: 3
     time_window:
       start_hour: 8
       end_hour: 20
@@ -62,7 +62,7 @@ alerts:
     wind:
       direction_min_deg: 30
       direction_max_deg: 100
-      min_consecutive_hours: 2
+      min_consecutive_hours: 3
     time_window:
       start_hour: 8
       end_hour: 20

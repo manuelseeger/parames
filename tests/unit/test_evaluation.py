@@ -102,7 +102,15 @@ def test_build_candidate_windows_filters_short_runs(default_config, fixed_now) -
             avg_precipitation_mm_per_hour=0.1,
         ),
         EvaluatedHour(
-            time=fixed_now + timedelta(hours=3),
+            time=fixed_now + timedelta(hours=2),
+            avg_wind_speed_kmh=11.0,
+            max_wind_speed_kmh=13.5,
+            avg_direction_deg=75.0,
+            models=("icon_ch2", "icon_d2"),
+            avg_precipitation_mm_per_hour=0.0,
+        ),
+        EvaluatedHour(
+            time=fixed_now + timedelta(hours=4),
             avg_wind_speed_kmh=12.0,
             max_wind_speed_kmh=14.0,
             avg_direction_deg=80.0,
@@ -113,7 +121,7 @@ def test_build_candidate_windows_filters_short_runs(default_config, fixed_now) -
 
     windows = build_candidate_windows(profile, hours)
     assert len(windows) == 1
-    assert windows[0].duration_hours == 2
+    assert windows[0].duration_hours == 3
 
 
 def _hours(fixed_now, *, count: int, speed: float):

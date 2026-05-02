@@ -19,6 +19,7 @@ from parames.forecast import (
     _create_default_ssl_context,
 )
 from parames.plugins.bise import BisePluginConfig
+from parames.plugins.laminar import LaminarPluginConfig
 
 OPEN_METEO_HISTORICAL_URL = "https://historical-forecast-api.open-meteo.com/v1/forecast"
 
@@ -34,6 +35,10 @@ def _build_requests(profile) -> list[dict[str, object]]:
         (p for p in profile.plugins if isinstance(p, BisePluginConfig) and p.enabled),
         None,
     )
+    laminar = next(
+        (p for p in profile.plugins if isinstance(p, LaminarPluginConfig) and p.enabled),
+        None,
+    )
     requests: list[dict[str, object]] = []
     for model in profile.models:
         requests.append(
@@ -44,6 +49,24 @@ def _build_requests(profile) -> list[dict[str, object]]:
                 "hourly_variables": hourly_variables,
             }
         )
+        if laminar:
+            level = laminar.wind_level_m
+            requests.append(
+                {
+                    "name": f"laminar_{model}",
+                    "location": profile.location.model_dump(),
+                    "model": model,
+                    "hourly_variables": [
+                        f"wind_speed_{level}m",
+                        f"wind_direction_{level}m",
+                        f"wind_gusts_{level}m",
+                        "precipitation",
+                        "showers",
+                        "cape",
+                        "pressure_msl",
+                    ],
+                }
+            )
         if bise:
             requests.append(
                 {
