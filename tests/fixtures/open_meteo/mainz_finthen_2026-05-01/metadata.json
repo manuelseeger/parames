@@ -32,6 +32,42 @@
         "precipitation",
         "pressure_msl"
       ]
+    },
+    {
+      "name": "laminar_icon_d2",
+      "location": {
+        "name": "mainz_finthen",
+        "latitude": 49.984,
+        "longitude": 8.274
+      },
+      "model": "icon_d2",
+      "hourly_variables": [
+        "wind_speed_10m",
+        "wind_direction_10m",
+        "wind_gusts_10m",
+        "precipitation",
+        "showers",
+        "cape",
+        "pressure_msl"
+      ]
+    },
+    {
+      "name": "laminar_ecmwf_ifs",
+      "location": {
+        "name": "mainz_finthen",
+        "latitude": 49.984,
+        "longitude": 8.274
+      },
+      "model": "ecmwf_ifs",
+      "hourly_variables": [
+        "wind_speed_10m",
+        "wind_direction_10m",
+        "wind_gusts_10m",
+        "precipitation",
+        "showers",
+        "cape",
+        "pressure_msl"
+      ]
     }
   ],
   "expected_windows": [
@@ -50,11 +86,12 @@
         "icon_d2"
       ],
       "dry_filter_applied": false,
-      "score": 46,
+      "score": 58,
       "classification": "candidate",
       "subscores": {
         "wind_speed": 18.492063492063497,
-        "wind_duration": 100.0
+        "wind_duration": 100.0,
+        "laminar": 95.0
       },
       "hours": [
         {

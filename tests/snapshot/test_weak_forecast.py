@@ -33,6 +33,6 @@ def test_mainz_finthen_weak_forecast(default_config) -> None:
 
     strong_min = default_config.scoring.tiers.strong_min
     assert window.score < strong_min, (
-        f"Expected weak forecast (score < {strong_min}), got {window.score}"
+        f"Expected below-strong forecast (score < {strong_min}), got {window.score}"
     )
-    assert window.classification == "weak"
+    assert window.classification.value == expected["classification"]

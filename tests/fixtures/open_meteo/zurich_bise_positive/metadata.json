@@ -119,6 +119,60 @@
       "hourly_variables": [
         "pressure_msl"
       ]
+    },
+    {
+      "name": "laminar_meteoswiss_icon_ch2",
+      "location": {
+        "name": "zurich_allmend",
+        "latitude": 47.357,
+        "longitude": 8.509
+      },
+      "model": "meteoswiss_icon_ch2",
+      "hourly_variables": [
+        "wind_speed_10m",
+        "wind_direction_10m",
+        "wind_gusts_10m",
+        "precipitation",
+        "showers",
+        "cape",
+        "pressure_msl"
+      ]
+    },
+    {
+      "name": "laminar_icon_d2",
+      "location": {
+        "name": "zurich_allmend",
+        "latitude": 47.357,
+        "longitude": 8.509
+      },
+      "model": "icon_d2",
+      "hourly_variables": [
+        "wind_speed_10m",
+        "wind_direction_10m",
+        "wind_gusts_10m",
+        "precipitation",
+        "showers",
+        "cape",
+        "pressure_msl"
+      ]
+    },
+    {
+      "name": "laminar_ecmwf_ifs",
+      "location": {
+        "name": "zurich_allmend",
+        "latitude": 47.357,
+        "longitude": 8.509
+      },
+      "model": "ecmwf_ifs",
+      "hourly_variables": [
+        "wind_speed_10m",
+        "wind_direction_10m",
+        "wind_gusts_10m",
+        "precipitation",
+        "showers",
+        "cape",
+        "pressure_msl"
+      ]
     }
   ],
   "expected_windows": [
@@ -139,7 +193,7 @@
         "meteoswiss_icon_ch2"
       ],
       "dry_filter_applied": false,
-      "score": 79,
+      "score": 77,
       "classification": "strong",
       "hours": [
         {
