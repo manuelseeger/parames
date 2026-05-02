@@ -16,6 +16,7 @@ scoring:
     wind_duration: 1.0
     plugins:
       bise: 0.5
+      laminar: 1.0
   emit_threshold: 40
   tiers:
     candidate_min: 50
@@ -42,6 +43,9 @@ alerts:
     dry:
       enabled: true
       max_precipitation_mm_per_hour: 0.2
+    plugins:
+      - type: laminar
+        enabled: true
     delivery:
       - console
 
@@ -77,6 +81,8 @@ alerts:
           name: guettingen
           latitude: 47.604
           longitude: 9.287
+      - type: laminar
+        enabled: true
     delivery:
       - console
 

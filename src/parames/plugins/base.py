@@ -6,6 +6,8 @@ from typing import Any, ClassVar, Protocol, runtime_checkable
 from pydantic import ConfigDict
 from pyodmongo import MainBaseModel
 
+from parames.common import LocationConfig
+
 
 class PluginConfigBase(MainBaseModel):
     """Base for all plugin config blocks. Concrete plugins set a Literal `type`."""
@@ -38,7 +40,7 @@ class EvaluationPlugin(Protocol):
     @property
     def enabled(self) -> bool: ...
 
-    def prefetch(self, *, client: Any, models: list[str]) -> Any: ...
+    def prefetch(self, *, client: Any, models: list[str], location: LocationConfig) -> Any: ...
 
     def score_window(
         self,

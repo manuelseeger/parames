@@ -32,6 +32,9 @@ class HourForecast(MainBaseModel):
     wind_direction: float | None = None
     precipitation: float | None = None
     pressure_msl: float | None = None
+    wind_gusts: float | None = None
+    cape: float | None = None
+    showers: float | None = None
 
 
 class CandidateWindow(MainBaseModel):

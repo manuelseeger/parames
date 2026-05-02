@@ -49,7 +49,7 @@ class BisePlugin:
     def enabled(self) -> bool:
         return self.config.enabled
 
-    def prefetch(self, *, client: OpenMeteoForecastClient, models: list[str]) -> BisePrefetched:
+    def prefetch(self, *, client: OpenMeteoForecastClient, models: list[str], location: LocationConfig) -> BisePrefetched:  # noqa: ARG002
         west: PressureByModel = {}
         east: PressureByModel = {}
         for model in models:

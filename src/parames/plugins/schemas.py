@@ -5,8 +5,9 @@ from typing import Annotated, Union
 from pydantic import Field
 
 from parames.plugins.bise import BisePluginConfig
+from parames.plugins.laminar import LaminarPluginConfig
 
 PluginConfig = Annotated[
-    Union[BisePluginConfig],
+    Union[BisePluginConfig, LaminarPluginConfig],
     Field(discriminator="type"),
 ]

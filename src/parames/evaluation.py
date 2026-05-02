@@ -138,7 +138,7 @@ def _evaluate_with_client(
 
     plugins = [p for p in build_plugins(profile.plugins) if p.enabled]
     plugin_data: dict[str, Any] = {
-        plugin.type: plugin.prefetch(client=client, models=profile.models)
+        plugin.type: plugin.prefetch(client=client, models=profile.models, location=profile.location)
         for plugin in plugins
     }
 

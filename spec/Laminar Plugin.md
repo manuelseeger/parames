@@ -110,10 +110,6 @@ plugins:
   - type: laminar
     enabled: true
 
-    # Optional: override the wind level used by the plugin's gust/wind reads.
-    # Defaults to the alert profile's wind_level_m.
-    wind_level_m: null
-
     # Model selection for primary / secondary signals.
     # Resolved at score time against contributing_models for the window.
     # If null, defaults to contributing_models[0] / contributing_models[1].
@@ -168,7 +164,6 @@ class GustFactorThresholds(MainBaseModel):
 
 class LaminarPluginConfig(PluginConfigBase):
     type: Literal["laminar"] = "laminar"
-    wind_level_m: int | None = None
     primary_model: str | None = None
     secondary_model: str | None = None
     gust_factor: GustFactorThresholds = Field(default_factory=GustFactorThresholds)
@@ -210,7 +205,6 @@ forecast horizon (`forecast_days=3` to match the core fetch):
 | `showers` | optional | Some models only return `precipitation`. Treat absence as `0`; emit `showers_unavailable` reason only if neither `showers` nor `precipitation` exist for that model. |
 | `wind_speed_{level}m`, `wind_direction_{level}m`, `precipitation`, `pressure_msl` | re-fetched | Already fetched by core; re-fetched here to keep the plugin self-contained. Known minor inefficiency — see §8. |
 
-The plugin reuses the alert profile's `wind_level_m` unless overridden.
 
 ### `LaminarPrefetched` shape
 

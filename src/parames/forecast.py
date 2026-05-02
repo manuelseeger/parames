@@ -124,6 +124,9 @@ class OpenMeteoForecastClient:
                 ("wind_direction", self._find_hourly_key(hourly, "wind_direction_")),
                 ("precipitation", "precipitation"),
                 ("pressure_msl", "pressure_msl"),
+                ("wind_gusts", self._find_hourly_key(hourly, "wind_gusts_")),
+                ("cape", "cape"),
+                ("showers", "showers"),
             ):
                 series = hourly.get(source_key) if source_key else None
                 value = series[index] if isinstance(series, list) and index < len(series) else None
