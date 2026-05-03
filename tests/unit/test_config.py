@@ -18,10 +18,10 @@ def test_default_config_parses() -> None:
 
 def test_default_config_includes_scoring_block() -> None:
     config = load_app_config(Path("config/default.yaml"))
-    assert config.scoring.emit_threshold == 40
+    assert config.scoring.emit_threshold == 50
     assert config.scoring.tiers.strong_min == 70
     assert config.scoring.weights.wind_speed == 2.0
-    assert config.scoring.weights.plugins["bise"] == 0.5
+    assert config.scoring.weights.plugins["bise"] == 0.7
 
 
 def test_scoring_defaults_when_block_omitted(tmp_path: Path) -> None:

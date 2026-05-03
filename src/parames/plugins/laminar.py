@@ -253,9 +253,9 @@ class LaminarPlugin:
             reasons.append("very_gusty")
             gf_outcome, gf_delta = "fail", -35.0
         elif max_gust_factor > cfg.gust_factor.good_max:
-            score -= 15
+            score -= 10
             reasons.append("high_gust_factor")
-            gf_outcome, gf_delta = "warn", -15.0
+            gf_outcome, gf_delta = "warn", -10.0
         else:
             reasons.append("low_gust_factor")
             gf_outcome, gf_delta = "pass", 0.0
@@ -272,8 +272,8 @@ class LaminarPlugin:
             score -= 25
             gs_outcome, gs_delta = "fail", -25.0
         elif max_gust_spread_kmh > cfg.gust_spread_kmh.good_max:
-            score -= 10
-            gs_outcome, gs_delta = "warn", -10.0
+            score -= 7
+            gs_outcome, gs_delta = "warn", -7.0
         else:
             gs_outcome, gs_delta = "pass", 0.0
 
@@ -297,9 +297,9 @@ class LaminarPlugin:
             reasons.append("very_shifty")
             dv_outcome, dv_delta = "fail", -25.0
         elif direction_variability_deg > cfg.direction_variability_deg.good_max:
-            score -= 10
+            score -= 7
             reasons.append("shifting_direction")
-            dv_outcome, dv_delta = "warn", -10.0
+            dv_outcome, dv_delta = "warn", -7.0
         else:
             reasons.append("stable_direction")
             dv_outcome, dv_delta = "pass", 0.0
@@ -323,9 +323,9 @@ class LaminarPlugin:
             reasons.append("high_speed_range")
             sr_outcome, sr_delta = "fail", -20.0
         elif speed_range_kmh > cfg.speed_range_kmh.good_max:
-            score -= 8
+            score -= 5
             reasons.append("high_speed_range")
-            sr_outcome, sr_delta = "warn", -8.0
+            sr_outcome, sr_delta = "warn", -5.0
         else:
             reasons.append("low_speed_range")
             sr_outcome, sr_delta = "pass", 0.0
@@ -360,9 +360,9 @@ class LaminarPlugin:
                 reasons.append("high_cape")
                 cape_outcome, cape_delta = "fail", -25.0
             elif max_cape > cfg.cape_j_kg.good_max:
-                score -= 10
+                score -= 7
                 reasons.append("moderate_cape")
-                cape_outcome, cape_delta = "warn", -10.0
+                cape_outcome, cape_delta = "warn", -7.0
             else:
                 reasons.append("low_cape")
                 cape_outcome, cape_delta = "pass", 0.0
@@ -379,9 +379,9 @@ class LaminarPlugin:
         max_precipitation = max((h.precipitation or 0.0) for h in window_hours)
         max_showers = max((h.showers or 0.0) for h in window_hours)
         if max_precipitation > cfg.precipitation.max_precip_mm_h:
-            score -= 30
+            score -= 15
             reasons.append("precipitation_risk")
-            precip_outcome, precip_delta = "fail", -30.0
+            precip_outcome, precip_delta = "fail", -15.0
         else:
             precip_outcome, precip_delta = "pass", 0.0
 
@@ -394,9 +394,9 @@ class LaminarPlugin:
         ))
 
         if max_showers > cfg.precipitation.max_showers_mm_h:
-            score -= 30
+            score -= 15
             reasons.append("showers_risk")
-            showers_outcome, showers_delta = "fail", -30.0
+            showers_outcome, showers_delta = "fail", -15.0
         else:
             showers_outcome, showers_delta = "pass", 0.0
 
@@ -460,9 +460,9 @@ class LaminarPlugin:
                     reasons.append("pressure_unstable")
                     pt_outcome, pt_delta = "fail", -15.0
                 elif abs_tendency > cfg.pressure_tendency_3h_hpa.good_max_abs:
-                    score -= 5
+                    score -= 3
                     reasons.append("pressure_unstable")
-                    pt_outcome, pt_delta = "warn", -5.0
+                    pt_outcome, pt_delta = "warn", -3.0
                 else:
                     reasons.append("pressure_stable")
                     pt_outcome, pt_delta = "pass", 0.0
@@ -480,13 +480,13 @@ class LaminarPlugin:
         model_dir_delta_deg: float | None = None
         model_speed_delta_kmh: float | None = None
         if secondary is None:
-            score -= 10
+            score -= 7
             reasons.append("secondary_model_unavailable")
             rules.append(RuleEvaluation(
                 name="model_agreement",
                 observed=None,
                 outcome="warn",
-                delta=-10.0,
+                delta=-7.0,
                 message="no secondary model available",
             ))
         else:
@@ -532,9 +532,9 @@ class LaminarPlugin:
                     dir_stat <= ma.direction_marginal_max_deg
                     and speed_stat <= ma.speed_marginal_max_kmh
                 ):
-                    score -= 10
+                    score -= 7
                     reasons.append("model_disagreement")
-                    ma_outcome, ma_delta = "warn", -10.0
+                    ma_outcome, ma_delta = "warn", -7.0
                 else:
                     score -= 25
                     reasons.append("model_disagreement")
@@ -555,13 +555,13 @@ class LaminarPlugin:
                 ))
             else:
                 # No overlapping data between models — treat as unavailable
-                score -= 10
+                score -= 7
                 reasons.append("secondary_model_unavailable")
                 rules.append(RuleEvaluation(
                     name="model_agreement",
                     observed=None,
                     outcome="warn",
-                    delta=-10.0,
+                    delta=-7.0,
                     message="no overlapping data between primary and secondary",
                 ))
 

@@ -141,12 +141,11 @@ def _hours(fixed_now, *, count: int, speed: float):
 @pytest.mark.parametrize(
     "speed,count,expected_classification",
     [
-        # wind_speed sub-score: tent(min=10, strong=28, peak=19)
-        # wind_duration sub-score: 0 if <2, 50 at 2, 75 at 3, 100 at 4+
-        (10.0, 2, "weak"),       # speed=0, dur=50 → 25
-        (12.0, 4, "candidate"),  # speed≈22, dur=100 → 61
-        (16.0, 4, "strong"),     # speed≈67, dur=100 → 83
-        (19.0, 4, "excellent"),  # speed=100, dur=100 → 100
+        # wind_speed sub-score: Gaussian(sweet_spot=20, sigma=7), per-hour averaged
+        (10.0, 2, "weak"),       # Gaussian(10)≈36 → score 36
+        (13.0, 4, "candidate"),  # Gaussian(13)≈61 → score 61
+        (15.0, 4, "strong"),     # Gaussian(15)≈78 → score 78
+        (20.0, 4, "excellent"),  # Gaussian(20)=100 → score 100
     ],
 )
 def test_score_window_tier_boundaries(default_config, fixed_now, speed, count, expected_classification) -> None:
@@ -160,7 +159,7 @@ def test_score_window_returns_unavailable_when_all_signals_opt_out(default_confi
     from parames.config import ScoringConfig, ScoringWeightsConfig
 
     profile = default_config.alerts[0].model_copy(update={"dry": None, "plugins": []})
-    scoring = ScoringConfig(weights=ScoringWeightsConfig(wind_speed=0.0, wind_duration=0.0, plugins={}))
+    scoring = ScoringConfig(weights=ScoringWeightsConfig(wind_speed=0.0, plugins={}))
     window = score_window(profile, _hours(fixed_now, count=4, speed=11.0), scoring=scoring)
     assert window.score is None
     assert window.classification == "unavailable"

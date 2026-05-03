@@ -25,6 +25,31 @@ scoring:
     excellent_min: 85
 
 alerts:
+  - name: schoenberg
+    description: "NE/E wind for ground handling - Schoenberg"
+    location:
+      name: schoenberg
+      latitude: 47.964790
+      longitude:  7.815324
+    models:
+      - icon_d2
+      - icon_eu
+      - ecmwf_ifs
+    wind:
+      direction_min_deg: 315
+      direction_max_deg: 45
+      min_consecutive_hours: 3
+    time_window:
+      start_hour: 8
+      end_hour: 20
+    dry:
+      enabled: true
+      max_precipitation_mm_per_hour: 0.2
+    plugins:
+      - type: laminar
+        enabled: true
+    delivery:
+      - console
   - name: mainz_finthen
     description: "NE/E wind for ground handling - Mainz Finthen"
     location:

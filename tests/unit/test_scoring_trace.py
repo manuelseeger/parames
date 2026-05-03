@@ -81,7 +81,7 @@ def test_scoring_trace_opt_out_plugin_excluded(default_config) -> None:
         def score_window(self, **_) -> PluginScoringResult:
             return PluginScoringResult(sub_score=None, output={})
 
-    scoring = ScoringConfig(weights=ScoringWeightsConfig(wind_speed=1.0, wind_duration=1.0, plugins={"bise": 0.5}))
+    scoring = ScoringConfig(weights=ScoringWeightsConfig(wind_speed=1.0, plugins={"bise": 0.5}))
     window_with = score_window(profile, hours, plugins=[_NullPlugin()], scoring=scoring)
     window_without = score_window(profile, hours, scoring=scoring)
 

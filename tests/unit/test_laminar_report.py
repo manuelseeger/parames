@@ -96,11 +96,11 @@ def test_gust_factor_rule_pass() -> None:
     assert rules["gust_factor"].delta == 0.0
 
 
-def test_gust_factor_rule_warn_delta_15() -> None:
+def test_gust_factor_rule_warn_delta_10() -> None:
     result = _score(hours={TS: _hour(TS, wind_speed=20.0, wind_gusts=30.0)})  # gf=1.5
     rules = {r.name: r for r in result.report.rules}
     assert rules["gust_factor"].outcome == "warn"
-    assert rules["gust_factor"].delta == pytest.approx(-15.0)
+    assert rules["gust_factor"].delta == pytest.approx(-10.0)
 
 
 def test_gust_factor_rule_fail_delta_35() -> None:
@@ -133,21 +133,21 @@ def test_cape_rule_present_when_data_available() -> None:
     rules = {r.name: r for r in result.report.rules}
     assert "cape" in rules
     assert rules["cape"].outcome == "warn"
-    assert rules["cape"].delta == pytest.approx(-10.0)
+    assert rules["cape"].delta == pytest.approx(-7.0)
 
 
-def test_precipitation_rule_fail_delta_30() -> None:
+def test_precipitation_rule_fail_delta_15() -> None:
     result = _score(hours={TS: _hour(TS, precipitation=0.5)})
     rules = {r.name: r for r in result.report.rules}
     assert rules["precipitation"].outcome == "fail"
-    assert rules["precipitation"].delta == pytest.approx(-30.0)
+    assert rules["precipitation"].delta == pytest.approx(-15.0)
 
 
-def test_showers_rule_fail_delta_30() -> None:
+def test_showers_rule_fail_delta_15() -> None:
     result = _score(hours={TS: _hour(TS, showers=0.3)})
     rules = {r.name: r for r in result.report.rules}
     assert rules["showers"].outcome == "fail"
-    assert rules["showers"].delta == pytest.approx(-30.0)
+    assert rules["showers"].delta == pytest.approx(-15.0)
 
 
 def test_pressure_tendency_rule_present() -> None:
