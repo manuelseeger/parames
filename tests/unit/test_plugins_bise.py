@@ -15,10 +15,9 @@ WEST_LOC = LocationConfig(name="geneva", latitude=46.204, longitude=6.143)
 EAST_LOC = LocationConfig(name="guettingen", latitude=47.604, longitude=9.287)
 
 
-def _config(*, enabled: bool = True, boost: bool = True, min_hpa: float = 1.5) -> BisePluginConfig:
+def _config(*, enabled: bool = True, min_hpa: float = 1.5) -> BisePluginConfig:
     return BisePluginConfig(
         enabled=enabled,
-        boost_if_bise=boost,
         east_minus_west_pressure_hpa_min=min_hpa,
         pressure_reference_west=WEST_LOC,
         pressure_reference_east=EAST_LOC,
@@ -38,55 +37,46 @@ def _prefetched(*, west_hpa: float, east_hpa: float, model: str = "icon_d2") -> 
 TS = datetime(2026, 4, 29, 12, 0, tzinfo=ZURICH)
 
 
-def test_bise_below_threshold_gives_no_boost() -> None:
+def test_bise_below_threshold_opts_out() -> None:
+    """Below-min gradient: corroboration absent → opt out (None) but still report value."""
     plugin = BisePlugin(_config(min_hpa=2.0))
     pre = _prefetched(west_hpa=1013.0, east_hpa=1014.0)  # gradient = 1.0 < 2.0
-    boost, output = plugin.score_window(
+    result = plugin.score_window(
         window_times=[TS], prefetched=pre, contributing_models=["icon_d2"]
     )
-    assert boost == 0
-    # gradient is always returned for display even when below threshold
-    assert output["gradient_hpa"] == pytest.approx(1.0)
+    assert result.sub_score is None
+    # Gradient is always reported for display, even when corroboration is absent.
+    assert result.output["gradient_hpa"] == pytest.approx(1.0)
 
 
-def test_bise_above_threshold_gives_plus_one() -> None:
+def test_bise_above_threshold_returns_75() -> None:
     plugin = BisePlugin(_config(min_hpa=1.5))
     pre = _prefetched(west_hpa=1013.0, east_hpa=1015.0)  # gradient = 2.0 ≥ 1.5
-    boost, output = plugin.score_window(
+    result = plugin.score_window(
         window_times=[TS], prefetched=pre, contributing_models=["icon_d2"]
     )
-    assert boost == 1
-    assert output["gradient_hpa"] == pytest.approx(2.0)
+    assert result.sub_score == pytest.approx(75.0)
+    assert result.output["gradient_hpa"] == pytest.approx(2.0)
 
 
-def test_bise_strong_gradient_gives_plus_two() -> None:
+def test_bise_strong_gradient_returns_100() -> None:
     plugin = BisePlugin(_config(min_hpa=1.5))
     pre = _prefetched(west_hpa=1010.0, east_hpa=1013.5)  # gradient = 3.5 ≥ 3.0
-    boost, output = plugin.score_window(
+    result = plugin.score_window(
         window_times=[TS], prefetched=pre, contributing_models=["icon_d2"]
     )
-    assert boost == 2
-    assert output["gradient_hpa"] == pytest.approx(3.5)
+    assert result.sub_score == pytest.approx(100.0)
+    assert result.output["gradient_hpa"] == pytest.approx(3.5)
 
 
-def test_bise_boost_disabled_returns_zero_boost_but_keeps_output() -> None:
-    plugin = BisePlugin(_config(boost=False))
-    pre = _prefetched(west_hpa=1010.0, east_hpa=1015.0)  # gradient = 5.0
-    boost, output = plugin.score_window(
-        window_times=[TS], prefetched=pre, contributing_models=["icon_d2"]
-    )
-    assert boost == 0
-    assert output["gradient_hpa"] == pytest.approx(5.0)
-
-
-def test_missing_pressure_data_returns_empty() -> None:
+def test_missing_pressure_data_opts_out() -> None:
     plugin = BisePlugin(_config())
     empty = BisePrefetched(west={}, east={})
-    boost, output = plugin.score_window(
+    result = plugin.score_window(
         window_times=[TS], prefetched=empty, contributing_models=["icon_d2"]
     )
-    assert boost == 0
-    assert output == {}
+    assert result.sub_score is None
+    assert result.output == {}
 
 
 def test_disabled_plugin_reports_enabled_false() -> None:

@@ -12,7 +12,7 @@ from parames.domain import CandidateWindow, WindowHour
 
 def _make_window(
     *,
-    score: int = 4,
+    score: int | None = 50,
     classification: str = "candidate",
     avg_precipitation_mm_per_hour: float | None = 0.4,
     bise_gradient_hpa: float | None = 2.0,

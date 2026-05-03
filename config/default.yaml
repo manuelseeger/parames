@@ -6,8 +6,76 @@ defaults:
     min_models_matching: 2
     max_direction_delta_deg: 35
     max_speed_delta_kmh: 8.0
+  wind:
+    min_speed_kmh: 10.0
+    strong_speed_kmh: 28.0
+    sweet_spot_kmh: 20.0
+    sweet_spot_sigma_kmh: 7.0
+
+scoring:
+  weights:
+    wind_speed: 2.0
+    plugins:
+      bise: 0.7
+      laminar: 0.7
+  emit_threshold: 50
+  tiers:
+    candidate_min: 60
+    strong_min: 70
+    excellent_min: 85
 
 alerts:
+  - name: schoenberg
+    description: "N wind for ground handling - Schoenberg"
+    location:
+      name: schoenberg
+      latitude: 47.964790
+      longitude:  7.815324
+    models:
+      - icon_d2
+      - icon_eu
+      - ecmwf_ifs
+    wind:
+      direction_min_deg: 315
+      direction_max_deg: 45
+      min_consecutive_hours: 3
+    time_window:
+      start_hour: 8
+      end_hour: 20
+    dry:
+      enabled: true
+      max_precipitation_mm_per_hour: 0.2
+    plugins:
+      - type: laminar
+        enabled: true
+    delivery:
+      - console
+  - name: mainz_finthen
+    description: "Wind for ground handling - Mainz Finthen"
+    location:
+      name: mainz_finthen
+      latitude: 49.984
+      longitude: 8.274
+    models:
+      - icon_d2
+      - icon_eu
+      - ecmwf_ifs
+    wind:
+      direction_min_deg: 0
+      direction_max_deg: 359
+      min_consecutive_hours: 3
+    time_window:
+      start_hour: 8
+      end_hour: 20
+    dry:
+      enabled: true
+      max_precipitation_mm_per_hour: 0.2
+    plugins:
+      - type: laminar
+        enabled: true
+    delivery:
+      - console
+
   - name: zurich_bise
     description: "NE/E wind for ground handling - Zurich Allmend"
     location:
@@ -16,14 +84,12 @@ alerts:
       longitude: 8.509
     models:
       - meteoswiss_icon_ch2
-      - icon_d2
+      - icon_eu 
       - ecmwf_ifs
     wind:
-      min_speed_kmh: 10.0
-      strong_speed_kmh: 12.0
       direction_min_deg: 30
       direction_max_deg: 100
-      min_consecutive_hours: 2
+      min_consecutive_hours: 3
     time_window:
       start_hour: 8
       end_hour: 20
@@ -34,7 +100,6 @@ alerts:
       - type: bise
         enabled: true
         east_minus_west_pressure_hpa_min: 1.5
-        boost_if_bise: true
         pressure_reference_west:
           name: geneva
           latitude: 46.204
@@ -43,9 +108,10 @@ alerts:
           name: guettingen
           latitude: 47.604
           longitude: 9.287
+      - type: laminar
+        enabled: true
     delivery:
       - console
-      - telegram
 
 delivery_channels:
   console:

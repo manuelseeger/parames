@@ -102,7 +102,15 @@ def test_build_candidate_windows_filters_short_runs(default_config, fixed_now) -
             avg_precipitation_mm_per_hour=0.1,
         ),
         EvaluatedHour(
-            time=fixed_now + timedelta(hours=3),
+            time=fixed_now + timedelta(hours=2),
+            avg_wind_speed_kmh=11.0,
+            max_wind_speed_kmh=13.5,
+            avg_direction_deg=75.0,
+            models=("icon_ch2", "icon_d2"),
+            avg_precipitation_mm_per_hour=0.0,
+        ),
+        EvaluatedHour(
+            time=fixed_now + timedelta(hours=4),
             avg_wind_speed_kmh=12.0,
             max_wind_speed_kmh=14.0,
             avg_direction_deg=80.0,
@@ -113,36 +121,79 @@ def test_build_candidate_windows_filters_short_runs(default_config, fixed_now) -
 
     windows = build_candidate_windows(profile, hours)
     assert len(windows) == 1
-    assert windows[0].duration_hours == 2
+    assert windows[0].duration_hours == 3
 
 
-def test_score_window_classification_boundaries(default_config, fixed_now) -> None:
-    profile = default_config.alerts[0].model_copy(update={"dry": None, "plugins": []})
-    hours = [
+def _hours(fixed_now, *, count: int, speed: float):
+    return [
         EvaluatedHour(
             time=fixed_now + timedelta(hours=index),
-            avg_wind_speed_kmh=10.5,
-            max_wind_speed_kmh=11.0,
+            avg_wind_speed_kmh=speed,
+            max_wind_speed_kmh=speed + 0.5,
             avg_direction_deg=60.0,
             models=("icon_ch2", "icon_d2"),
-            avg_precipitation_mm_per_hour=0.1,
+            avg_precipitation_mm_per_hour=0.0,
         )
-        for index in range(4)
+        for index in range(count)
     ]
 
-    window = score_window(profile, hours)
-    # speed 10.5 >= min 10.0 but < strong 12.0 → +1; 4 hours → +2; no plugins → total 3
-    assert window.score == 3
-    assert window.classification == "candidate"
+
+@pytest.mark.parametrize(
+    "speed,count,expected_classification",
+    [
+        # wind_speed sub-score: Gaussian(sweet_spot=20, sigma=7), per-hour averaged
+        (10.0, 2, "weak"),       # Gaussian(10)≈36 → score 36
+        (13.0, 4, "candidate"),  # Gaussian(13)≈61 → score 61
+        (15.0, 4, "strong"),     # Gaussian(15)≈78 → score 78
+        (20.0, 4, "excellent"),  # Gaussian(20)=100 → score 100
+    ],
+)
+def test_score_window_tier_boundaries(default_config, fixed_now, speed, count, expected_classification) -> None:
+    profile = default_config.alerts[0].model_copy(update={"dry": None, "plugins": []})
+    window = score_window(profile, _hours(fixed_now, count=count, speed=speed))
+    assert window.classification == expected_classification
+
+
+def test_score_window_returns_unavailable_when_all_signals_opt_out(default_config, fixed_now) -> None:
+    """An aggregator with zero-weight built-ins and no plugins yields score=None."""
+    from parames.config import ScoringConfig, ScoringWeightsConfig
+
+    profile = default_config.alerts[0].model_copy(update={"dry": None, "plugins": []})
+    scoring = ScoringConfig(weights=ScoringWeightsConfig(wind_speed=0.0, plugins={}))
+    window = score_window(profile, _hours(fixed_now, count=4, speed=11.0), scoring=scoring)
+    assert window.score is None
+    assert window.classification == "unavailable"
+
+
+def test_score_window_renormalizes_when_plugin_opts_out(default_config, fixed_now) -> None:
+    """A plugin that returns None is excluded from both numerator and denominator."""
+    from typing import Any
+
+    profile = default_config.alerts[0].model_copy(update={"dry": None, "plugins": []})
+    hours = _hours(fixed_now, count=4, speed=11.0)
+
+    class _NoneBisePlugin:
+        type = "bise"
+        enabled = True
+        def prefetch(self, **_): return None
+        def score_window(self, **_):
+            from parames.plugins.base import PluginScoringResult
+            return PluginScoringResult(sub_score=None, output={})
+
+    baseline = score_window(profile, hours)
+    with_opt_out = score_window(profile, hours, plugins=[_NoneBisePlugin()])
+    # Plugin opting out doesn't move the score — same as baseline.
+    assert baseline.score == with_opt_out.score
+    assert with_opt_out.subscores["bise"] is None
 
 
 def test_evaluate_positive_snapshot_replays_expected_window(default_config) -> None:
-    profile = default_config.alerts[0]
+    profile = next(a for a in default_config.alerts if a.name == "zurich_bise")
     snapshot_client = SnapshotForecastClient(FIXTURE_DIR)
     now = snapshot_client.captured_at
 
     try:
-        windows = evaluate(profile, client=snapshot_client, now=now)
+        windows = evaluate(profile, client=snapshot_client, now=now, scoring=default_config.scoring)
     finally:
         snapshot_client.close()
 

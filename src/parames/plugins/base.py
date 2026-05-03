@@ -6,6 +6,8 @@ from typing import Any, ClassVar, Protocol, runtime_checkable
 from pydantic import ConfigDict
 from pyodmongo import MainBaseModel
 
+from parames.common import LocationConfig
+
 
 class PluginConfigBase(MainBaseModel):
     """Base for all plugin config blocks. Concrete plugins set a Literal `type`."""
@@ -16,14 +18,26 @@ class PluginConfigBase(MainBaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class PluginScoringResult(MainBaseModel):
+    sub_score: float | None
+    output: dict[str, Any] = {}
+    report: Any | None = None  # PluginReport — typed as Any to avoid circular import
+
+
 @runtime_checkable
 class EvaluationPlugin(Protocol):
     """A pluggable extra evaluation slotted into an alert profile.
 
     Lifecycle per evaluation run:
       1. `prefetch` — fetch any extra forecast data the plugin needs.
-      2. `score_window` — at window-scoring time, return a (score_delta, output_dict).
-         The output_dict is stored on `CandidateWindow.plugin_outputs[type]`.
+      2. `score_window` — at window-scoring time, return a PluginScoringResult.
+         `sub_score` is a float in [0, 100] that participates in the weighted-mean
+         aggregator, or `None` to opt out of this window.
+         `output` is stored on `CandidateWindow.plugin_outputs[type]`.
+         `report` is appended to `EvaluationReport.plugin_reports`.
+
+    Per-plugin weight is global config, looked up from
+    `ScoringConfig.weights.plugins[type]` at aggregation time.
     """
 
     type: ClassVar[str]
@@ -31,7 +45,7 @@ class EvaluationPlugin(Protocol):
     @property
     def enabled(self) -> bool: ...
 
-    def prefetch(self, *, client: Any, models: list[str]) -> Any: ...
+    def prefetch(self, *, client: Any, models: list[str], location: LocationConfig) -> Any: ...
 
     def score_window(
         self,
@@ -39,7 +53,7 @@ class EvaluationPlugin(Protocol):
         window_times: list[datetime],
         prefetched: Any,
         contributing_models: list[str],
-    ) -> tuple[int, dict[str, Any]]: ...
+    ) -> PluginScoringResult: ...
 
 
 PLUGIN_REGISTRY: dict[str, type[EvaluationPlugin]] = {}

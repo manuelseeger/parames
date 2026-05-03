@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, Union
 
 from pyodmongo import DbModel, Field, Id
 from pymongo import ASCENDING, DESCENDING, IndexModel
@@ -13,8 +13,9 @@ from parames.config import (
     TimeWindowConfig,
     WindConfig,
 )
-from parames.domain import CandidateWindow
-from parames.plugins.schemas import PluginConfig
+from parames.domain import CandidateWindow, Classification
+from parames.plugins.bise import BisePluginConfig
+from parames.plugins.laminar import LaminarPluginConfig
 
 RunStatus = Literal["running", "completed", "failed"]
 DeliveryStatus = Literal["sent", "failed", "skipped"]
@@ -36,7 +37,9 @@ class AlertDefinition(DbModel):
     wind: WindConfig
     time_window: TimeWindowConfig | None = None
     dry: DryConfig | None = None
-    plugins: list[PluginConfig] = []
+    # Plain Union (no Annotated wrapper) so pyodmongo can detect nested model
+    # fields and recurse into each plugin config for BSON serialization.
+    plugins: list[Union[BisePluginConfig, LaminarPluginConfig]] = []
     delivery: list[str]
     suppress_duplicates: bool | None = None
     created_at: datetime = Field(default_factory=_utcnow)
@@ -58,6 +61,7 @@ class Run(DbModel):
     windows_found: int = 0
     deliveries_attempted: int = 0
     deliveries_suppressed: int = 0
+    is_backtest: bool = False
 
     _collection: ClassVar = "runs"
     _indexes: ClassVar = [
@@ -71,11 +75,13 @@ class Detection(DbModel):
     local_date: str
     start: datetime
     end: datetime
-    score: int
-    classification: str
+    # 0–100 weighted-mean composite, or None when every signal opted out.
+    score: int | None
+    classification: Classification
     first_seen_run_id: Id
     last_seen_run_id: Id
     seen_count: int = 1
+    is_backtest: bool = False
     window: CandidateWindow
 
     _collection: ClassVar = "detections"

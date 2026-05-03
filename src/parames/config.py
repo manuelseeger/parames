@@ -25,8 +25,12 @@ __all__ = [
     "ModelAgreementConfig",
     "RuntimeSettings",
     "SchedulerConfig",
+    "ScoringConfig",
+    "ScoringTiersConfig",
+    "ScoringWeightsConfig",
     "TimeWindowConfig",
     "WindConfig",
+    "WindDefaultsConfig",
     "definition_to_profile",
     "load_app_config",
     "resolve_profile_defaults",
@@ -40,17 +44,27 @@ class ModelAgreementConfig(MainBaseModel):
     max_speed_delta_kmh: float = Field(default=8.0, ge=0)
 
 
+class WindDefaultsConfig(BaseModel):
+    min_speed_kmh: float = Field(default=10.0, ge=0)
+    strong_speed_kmh: float = Field(default=28.0, ge=0)
+    sweet_spot_kmh: float = Field(default=20.0, ge=0)
+    sweet_spot_sigma_kmh: float = Field(default=7.0, gt=0)
+
+
 class DefaultsConfig(BaseModel):
     forecast_hours: int = Field(default=48, ge=1, le=72)
     wind_level_m: int = Field(default=10, ge=1)
     model_agreement: ModelAgreementConfig = Field(default_factory=ModelAgreementConfig)
+    wind: WindDefaultsConfig = Field(default_factory=WindDefaultsConfig)
 
 
 class WindConfig(MainBaseModel):
-    min_speed_kmh: float = Field(ge=0)
-    strong_speed_kmh: float = Field(ge=0)
+    min_speed_kmh: float | None = Field(default=None, ge=0)
+    strong_speed_kmh: float | None = Field(default=None, ge=0)
+    sweet_spot_kmh: float | None = Field(default=None, ge=0)
+    sweet_spot_sigma_kmh: float | None = Field(default=None, gt=0)
     direction_min_deg: float = Field(ge=0, lt=360)
-    direction_max_deg: float = Field(ge=0, lt=360)
+    direction_max_deg: float = Field(ge=0, le=360)
     min_consecutive_hours: int = Field(default=2, ge=1)
 
 
@@ -81,6 +95,31 @@ class SchedulerConfig(BaseModel):
     cron_minute: str | None = None
 
 
+class ScoringWeightsConfig(MainBaseModel):
+    wind_speed: float = Field(default=1.0, ge=0)
+    plugins: dict[str, float] = Field(default_factory=lambda: {"bise": 0.5})
+
+
+class ScoringTiersConfig(MainBaseModel):
+    candidate_min: int = Field(default=40, ge=0, le=100)
+    strong_min: int = Field(default=70, ge=0, le=100)
+    excellent_min: int = Field(default=85, ge=0, le=100)
+
+    @model_validator(mode="after")
+    def validate_ordering(self) -> "ScoringTiersConfig":
+        if not (self.candidate_min < self.strong_min < self.excellent_min):
+            raise ValueError(
+                "scoring.tiers must satisfy candidate_min < strong_min < excellent_min"
+            )
+        return self
+
+
+class ScoringConfig(MainBaseModel):
+    weights: ScoringWeightsConfig = Field(default_factory=ScoringWeightsConfig)
+    emit_threshold: int = Field(default=40, ge=0, le=100)
+    tiers: ScoringTiersConfig = Field(default_factory=ScoringTiersConfig)
+
+
 class AlertProfileConfig(BaseModel):
     name: str
     description: str | None = None
@@ -106,6 +145,7 @@ class AlertProfileConfig(BaseModel):
 
 class AppConfig(BaseModel):
     defaults: DefaultsConfig = Field(default_factory=DefaultsConfig)
+    scoring: ScoringConfig = Field(default_factory=ScoringConfig)
 
     alerts: list[AlertProfileConfig] = Field(default_factory=list)
     delivery_channels: dict[str, DeliveryChannelConfig]
@@ -117,10 +157,17 @@ class AppConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_config(self) -> "AppConfig":
+        from aiogram.utils.token import TokenValidationError
+
         for name, channel in self.delivery_channels.items():
             if channel.type == "telegram":
                 settings = RuntimeSettings()
-                if not validate_telegram_token(settings.telegram_bot_token.get_secret_value() if settings.telegram_bot_token else ""):
+                token = settings.telegram_bot_token.get_secret_value() if settings.telegram_bot_token else ""
+                try:
+                    valid = bool(validate_telegram_token(token))
+                except TokenValidationError:
+                    valid = False
+                if not valid:
                     logger.error(f"Telegram bot token not set for channel '{name}'. Set PARAMES_TELEGRAM_BOT_TOKEN env var.")
                 break
 
@@ -158,11 +205,18 @@ def definition_to_profile(definition: object) -> "AlertProfileConfig":
 def resolve_profile_defaults(
     profile: AlertProfileConfig, defaults: DefaultsConfig
 ) -> AlertProfileConfig:
+    resolved_wind = profile.wind.model_copy(update={
+        "min_speed_kmh": profile.wind.min_speed_kmh if profile.wind.min_speed_kmh is not None else defaults.wind.min_speed_kmh,
+        "strong_speed_kmh": profile.wind.strong_speed_kmh if profile.wind.strong_speed_kmh is not None else defaults.wind.strong_speed_kmh,
+        "sweet_spot_kmh": profile.wind.sweet_spot_kmh if profile.wind.sweet_spot_kmh is not None else defaults.wind.sweet_spot_kmh,
+        "sweet_spot_sigma_kmh": profile.wind.sweet_spot_sigma_kmh if profile.wind.sweet_spot_sigma_kmh is not None else defaults.wind.sweet_spot_sigma_kmh,
+    })
     return profile.model_copy(
         update={
             "forecast_hours": profile.forecast_hours or defaults.forecast_hours,
             "wind_level_m": profile.wind_level_m or defaults.wind_level_m,
             "model_agreement": profile.model_agreement or defaults.model_agreement,
+            "wind": resolved_wind,
         }
     )
 

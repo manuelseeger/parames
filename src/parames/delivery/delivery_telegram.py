@@ -41,11 +41,22 @@ def _build_chart(hours: list[WindowHour]) -> str:
 
 
 def _format_window(alert_name: str, window: CandidateWindow) -> str:
-    medal = "🟢" if window.score >= 5 else "🟡"
+    if window.score is None:
+        medal = "⚪"
+        score_str = "unavailable"
+    elif window.score >= 85:
+        medal = "🌟"
+        score_str = str(window.score)
+    elif window.score >= 70:
+        medal = "🟢"
+        score_str = str(window.score)
+    else:
+        medal = "🟡"
+        score_str = str(window.score)
     classification = window.classification.upper()
 
     header = (
-        f"{medal} *{_md2(alert_name)} — {_md2(classification)}*  ⭐ {window.score}/7"
+        f"{medal} *{_md2(alert_name)} — {_md2(classification)}*  ⭐ {_md2(score_str)}"
     )
     date_line = (
         f"📅 {_md2(window.start.strftime('%a %Y-%m-%d %H:%M'))} – "
@@ -58,12 +69,6 @@ def _format_window(alert_name: str, window: CandidateWindow) -> str:
     )
     dir_line = f"🧭 avg {_md2(f'{window.avg_direction_deg:.0f}')}°"
 
-    bise_gradient = window.plugin_outputs.get("bise", {}).get("gradient_hpa")
-    if bise_gradient is None:
-        bise_line = "🌡 Bise gradient: unavailable"
-    else:
-        bise_line = f"🌡 Bise gradient: \\+{_md2(f'{bise_gradient:.1f}')} hPa east\\-west"
-
     if window.avg_precipitation_mm_per_hour is None:
         precip_line = "💧 Precipitation: unavailable"
     else:
@@ -72,7 +77,35 @@ def _format_window(alert_name: str, window: CandidateWindow) -> str:
             f"max {_md2(f'{window.max_precipitation_mm_per_hour:.1f}')} mm/h"
         )
 
-    parts = [header, date_line, wind_line, dir_line, bise_line, precip_line]
+    parts = [header, date_line]
+
+    subscore_parts = [
+        f"{_md2(name)}: {round(sub)}"
+        for name, sub in window.subscores.items()
+        if sub is not None
+    ]
+    if subscore_parts:
+        parts.append(f"📊 {' · '.join(subscore_parts)}")
+
+    parts.extend([wind_line, dir_line])
+
+    if "bise" in window.subscores:
+        bise_gradient = window.plugin_outputs.get("bise", {}).get("gradient_hpa")
+        if bise_gradient is None:
+            parts.append("🌡 Bise gradient: unavailable")
+        else:
+            parts.append(f"🌡 Bise gradient: \\+{_md2(f'{bise_gradient:.1f}')} hPa east\\-west")
+
+    if "laminar" in window.subscores:
+        laminar = window.plugin_outputs.get("laminar", {})
+        label = laminar.get("label", "unavailable")
+        reasons = laminar.get("reasons", [])
+        if reasons:
+            parts.append(f"🌊 Laminar: {_md2(label)} \\({_md2(', '.join(reasons[:3]))}\\)")
+        else:
+            parts.append(f"🌊 Laminar: {_md2(label)}")
+
+    parts.append(precip_line)
 
     chart = _build_chart(window.hours)
     if chart:

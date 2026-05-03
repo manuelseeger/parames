@@ -24,7 +24,7 @@ function emptyDefinition() {
     },
     wind: {
       min_speed_kmh: 10,
-      strong_speed_kmh: 12,
+      strong_speed_kmh: null,
       direction_min_deg: 0,
       direction_max_deg: 360,
       min_consecutive_hours: 2,
@@ -42,11 +42,38 @@ function emptyBisePlugin() {
     type: 'bise',
     enabled: true,
     east_minus_west_pressure_hpa_min: 1.5,
-    boost_if_bise: true,
     pressure_reference_west: { name: '', latitude: 0, longitude: 0 },
     pressure_reference_east: { name: '', latitude: 0, longitude: 0 },
   };
 }
+
+function emptyLaminarPlugin() {
+  return {
+    type: 'laminar',
+    enabled: true,
+    primary_model: null,
+    secondary_model: null,
+    wind_level_m: 10,
+    gust_factor: { good_max: 1.35, marginal_max: 1.60 },
+    gust_spread_kmh: { good_max: 6.0, marginal_max: 10.0 },
+    direction_variability_deg: { good_max: 20, marginal_max: 40 },
+    speed_range_kmh: { good_max: 4.0, marginal_max: 7.0 },
+    cape_j_kg: { good_max: 50, marginal_max: 200 },
+    model_agreement: {
+      direction_good_max_deg: 25,
+      direction_marginal_max_deg: 40,
+      speed_good_max_kmh: 5.0,
+      speed_marginal_max_kmh: 8.0,
+    },
+    pressure_tendency_3h_hpa: { good_max_abs: 1.5, marginal_max_abs: 2.5 },
+    precipitation: { max_precip_mm_h: 0.0, max_showers_mm_h: 0.0 },
+  };
+}
+
+const PLUGIN_FACTORIES = {
+  bise: emptyBisePlugin,
+  laminar: emptyLaminarPlugin,
+};
 
 const def = reactive(emptyDefinition());
 const error = ref(null);
@@ -57,6 +84,7 @@ const deliveryText = ref('');
 const hasTimeWindow = ref(true);
 const hasDry = ref(true);
 const hasModelAgreement = ref(true);
+const newPluginType = ref('laminar');
 
 const isEdit = computed(() => !!props.id);
 
@@ -99,7 +127,10 @@ function toggleModelAgreement() {
     : null;
 }
 
-function addBisePlugin() { def.plugins.push(emptyBisePlugin()); }
+function addPlugin() {
+  const factory = PLUGIN_FACTORIES[newPluginType.value];
+  if (factory) def.plugins.push(factory());
+}
 function removePlugin(idx) { def.plugins.splice(idx, 1); }
 
 async function submit() {
@@ -114,6 +145,17 @@ async function submit() {
     delete payload._id;
     delete payload.created_at;
     delete payload.updated_at;
+    const s = payload.wind.strong_speed_kmh;
+    if (s === '' || s === null || s === undefined || (typeof s === 'number' && isNaN(s))) {
+      payload.wind.strong_speed_kmh = null;
+    }
+    // Coerce empty-string optional fields on plugins to null.
+    for (const p of (payload.plugins || [])) {
+      if (p.type === 'laminar') {
+        if (!p.primary_model) p.primary_model = null;
+        if (!p.secondary_model) p.secondary_model = null;
+      }
+    }
 
     if (isEdit.value) {
       await api.updateAlertDefinition(props.id, payload);
@@ -191,8 +233,8 @@ function cancel() { navigate('/alerts'); }
             <input type="number" step="any" v-model.number="def.wind.min_speed_kmh" required>
           </div>
           <div class="field">
-            <label>Strong speed (km/h)</label>
-            <input type="number" step="any" v-model.number="def.wind.strong_speed_kmh" required>
+            <label>Strong speed (km/h) <span class="muted">(optional)</span></label>
+            <input type="number" step="any" v-model.number="def.wind.strong_speed_kmh" placeholder="use global default">
           </div>
           <div class="field">
             <label>Min consecutive hours</label>
@@ -209,7 +251,7 @@ function cancel() { navigate('/alerts'); }
             <input type="number" min="0" max="360" step="1" v-model.number="def.wind.direction_max_deg" required>
           </div>
         </div>
-        <div class="field-help">Direction range 0–360: use 0–360 or 0–0 for any direction. Wrap-around supported (e.g. 330–30 for N).</div>
+        <div class="field-help">Use 0–360 for any direction. Wrap-around supported (e.g. 330–30 for N).</div>
       </section>
 
       <section class="card">
@@ -255,7 +297,13 @@ function cancel() { navigate('/alerts'); }
       <section class="card">
         <div class="section-header">
           <h2>Plugins</h2>
-          <button type="button" class="btn btn-sm" @click="addBisePlugin">+ Add bise plugin</button>
+          <div class="plugin-add-row">
+            <select v-model="newPluginType" class="select-sm">
+              <option value="laminar">laminar</option>
+              <option value="bise">bise</option>
+            </select>
+            <button type="button" class="btn btn-sm" @click="addPlugin">+ Add plugin</button>
+          </div>
         </div>
         <div v-if="def.plugins.length === 0" class="muted">No plugins.</div>
         <div v-for="(p, idx) in def.plugins" :key="idx" class="plugin-entry">
@@ -264,6 +312,7 @@ function cancel() { navigate('/alerts'); }
             <button type="button" class="btn btn-sm btn-danger" @click="removePlugin(idx)">Remove</button>
           </div>
 
+          <!-- Bise plugin fields -->
           <template v-if="p.type === 'bise'">
             <div class="field-checkbox">
               <input type="checkbox" :id="'bise-en-' + idx" v-model="p.enabled">
@@ -274,12 +323,8 @@ function cancel() { navigate('/alerts'); }
                 <label>Min E−W gradient (hPa)</label>
                 <input type="number" step="any" v-model.number="p.east_minus_west_pressure_hpa_min" required>
               </div>
-              <div class="field-checkbox" style="align-self: end;">
-                <input type="checkbox" :id="'bise-boost-' + idx" v-model="p.boost_if_bise">
-                <label :for="'bise-boost-' + idx">Apply score boost</label>
-              </div>
             </div>
-            <h3 style="margin-top: 12px;">West reference</h3>
+            <h3 class="plugin-subheader">West reference</h3>
             <div class="field-row">
               <div class="field">
                 <label>Name</label>
@@ -294,7 +339,7 @@ function cancel() { navigate('/alerts'); }
                 <input type="number" step="any" v-model.number="p.pressure_reference_west.longitude" required>
               </div>
             </div>
-            <h3 style="margin-top: 12px;">East reference</h3>
+            <h3 class="plugin-subheader">East reference</h3>
             <div class="field-row">
               <div class="field">
                 <label>Name</label>
@@ -310,6 +355,92 @@ function cancel() { navigate('/alerts'); }
               </div>
             </div>
           </template>
+
+          <!-- Laminar plugin fields -->
+          <template v-else-if="p.type === 'laminar'">
+            <div class="field-checkbox">
+              <input type="checkbox" :id="'lam-en-' + idx" v-model="p.enabled">
+              <label :for="'lam-en-' + idx">Enabled</label>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label>Primary model <span class="muted">(optional)</span></label>
+                <input type="text" v-model="p.primary_model" placeholder="e.g. icon_d2">
+              </div>
+              <div class="field">
+                <label>Secondary model <span class="muted">(optional)</span></label>
+                <input type="text" v-model="p.secondary_model" placeholder="e.g. ecmwf_ifs">
+              </div>
+              <div class="field">
+                <label>Wind level (m)</label>
+                <input type="number" v-model.number="p.wind_level_m" required>
+              </div>
+            </div>
+            <h3 class="plugin-subheader">Thresholds <span class="muted">(good max / marginal max)</span></h3>
+            <div class="threshold-grid">
+              <div class="threshold-row">
+                <span class="threshold-label">Gust factor</span>
+                <input type="number" step="0.01" v-model.number="p.gust_factor.good_max">
+                <input type="number" step="0.01" v-model.number="p.gust_factor.marginal_max">
+              </div>
+              <div class="threshold-row">
+                <span class="threshold-label">Gust spread (km/h)</span>
+                <input type="number" step="0.5" v-model.number="p.gust_spread_kmh.good_max">
+                <input type="number" step="0.5" v-model.number="p.gust_spread_kmh.marginal_max">
+              </div>
+              <div class="threshold-row">
+                <span class="threshold-label">Direction variability (°)</span>
+                <input type="number" step="1" v-model.number="p.direction_variability_deg.good_max">
+                <input type="number" step="1" v-model.number="p.direction_variability_deg.marginal_max">
+              </div>
+              <div class="threshold-row">
+                <span class="threshold-label">Speed range (km/h)</span>
+                <input type="number" step="0.5" v-model.number="p.speed_range_kmh.good_max">
+                <input type="number" step="0.5" v-model.number="p.speed_range_kmh.marginal_max">
+              </div>
+              <div class="threshold-row">
+                <span class="threshold-label">CAPE (J/kg)</span>
+                <input type="number" step="10" v-model.number="p.cape_j_kg.good_max">
+                <input type="number" step="10" v-model.number="p.cape_j_kg.marginal_max">
+              </div>
+              <div class="threshold-row">
+                <span class="threshold-label">Pressure tendency abs (hPa/3h)</span>
+                <input type="number" step="0.1" v-model.number="p.pressure_tendency_3h_hpa.good_max_abs">
+                <input type="number" step="0.1" v-model.number="p.pressure_tendency_3h_hpa.marginal_max_abs">
+              </div>
+            </div>
+            <h3 class="plugin-subheader">Model agreement</h3>
+            <div class="field-row">
+              <div class="field">
+                <label>Direction good max (°)</label>
+                <input type="number" step="1" v-model.number="p.model_agreement.direction_good_max_deg">
+              </div>
+              <div class="field">
+                <label>Direction marginal max (°)</label>
+                <input type="number" step="1" v-model.number="p.model_agreement.direction_marginal_max_deg">
+              </div>
+              <div class="field">
+                <label>Speed good max (km/h)</label>
+                <input type="number" step="0.5" v-model.number="p.model_agreement.speed_good_max_kmh">
+              </div>
+              <div class="field">
+                <label>Speed marginal max (km/h)</label>
+                <input type="number" step="0.5" v-model.number="p.model_agreement.speed_marginal_max_kmh">
+              </div>
+            </div>
+            <h3 class="plugin-subheader">Precipitation</h3>
+            <div class="field-row">
+              <div class="field">
+                <label>Max precip (mm/h)</label>
+                <input type="number" step="0.1" v-model.number="p.precipitation.max_precip_mm_h">
+              </div>
+              <div class="field">
+                <label>Max showers (mm/h)</label>
+                <input type="number" step="0.1" v-model.number="p.precipitation.max_showers_mm_h">
+              </div>
+            </div>
+          </template>
+
         </div>
       </section>
 

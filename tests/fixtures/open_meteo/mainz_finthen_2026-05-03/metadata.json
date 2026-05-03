@@ -1,0 +1,74 @@
+{
+  "captured_at": "2026-05-03T12:00:00+02:00",
+  "timezone": "Europe/Zurich",
+  "profile_name": "mainz_finthen",
+  "requests": [
+    {
+      "name": "alert_icon_d2",
+      "location": {
+        "name": "mainz_finthen",
+        "latitude": 49.984,
+        "longitude": 8.274
+      },
+      "model": "icon_d2",
+      "hourly_variables": [
+        "wind_speed_10m",
+        "wind_direction_10m",
+        "precipitation",
+        "pressure_msl"
+      ]
+    },
+    {
+      "name": "laminar_icon_d2",
+      "location": {
+        "name": "mainz_finthen",
+        "latitude": 49.984,
+        "longitude": 8.274
+      },
+      "model": "icon_d2",
+      "hourly_variables": [
+        "wind_speed_10m",
+        "wind_direction_10m",
+        "wind_gusts_10m",
+        "precipitation",
+        "showers",
+        "cape",
+        "pressure_msl"
+      ]
+    },
+    {
+      "name": "alert_ecmwf_ifs",
+      "location": {
+        "name": "mainz_finthen",
+        "latitude": 49.984,
+        "longitude": 8.274
+      },
+      "model": "ecmwf_ifs",
+      "hourly_variables": [
+        "wind_speed_10m",
+        "wind_direction_10m",
+        "precipitation",
+        "pressure_msl"
+      ]
+    },
+    {
+      "name": "laminar_ecmwf_ifs",
+      "location": {
+        "name": "mainz_finthen",
+        "latitude": 49.984,
+        "longitude": 8.274
+      },
+      "model": "ecmwf_ifs",
+      "hourly_variables": [
+        "wind_speed_10m",
+        "wind_direction_10m",
+        "wind_gusts_10m",
+        "precipitation",
+        "showers",
+        "cape",
+        "pressure_msl"
+      ]
+    }
+  ],
+  "expected_windows": []
+}

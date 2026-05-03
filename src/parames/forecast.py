@@ -3,20 +3,31 @@ from __future__ import annotations
 import ssl
 from collections.abc import Iterable
 from datetime import datetime
+from typing import Protocol
 from zoneinfo import ZoneInfo
 
 import certifi
 import httpx
 
-from parames.config import LocationConfig
+from parames.common import LocationConfig
 from parames.domain import HourForecast
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 ZURICH_TIMEZONE = "Europe/Zurich"
-LEGACY_MODEL_ALIASES = {
-    "icon_ch1": "meteoswiss_icon_ch1",
-    "icon_ch2": "meteoswiss_icon_ch2",
-}
+
+
+class ForecastClient(Protocol):
+    def fetch_hourly_forecast(
+        self,
+        *,
+        location: LocationConfig,
+        model: str,
+        hourly_variables: Iterable[str],
+        forecast_days: int = 3,
+        timezone: str = ZURICH_TIMEZONE,
+    ) -> dict[datetime, HourForecast]: ...
+
+    def close(self) -> None: ...
 
 
 def _create_default_ssl_context() -> ssl.SSLContext:
@@ -62,14 +73,13 @@ class OpenMeteoForecastClient:
         forecast_days: int = 3,
         timezone: str = ZURICH_TIMEZONE,
     ) -> dict[datetime, HourForecast]:
-        resolved_model = LEGACY_MODEL_ALIASES.get(model, model)
         response = self._client.get(
             "",
             params={
                 "latitude": location.latitude,
                 "longitude": location.longitude,
                 "hourly": ",".join(hourly_variables),
-                "models": resolved_model,
+                "models": model,
                 "forecast_days": forecast_days,
                 "timezone": timezone,
                 "wind_speed_unit": "kmh",
@@ -109,6 +119,9 @@ class OpenMeteoForecastClient:
                 ("wind_direction", self._find_hourly_key(hourly, "wind_direction_")),
                 ("precipitation", "precipitation"),
                 ("pressure_msl", "pressure_msl"),
+                ("wind_gusts", self._find_hourly_key(hourly, "wind_gusts_")),
+                ("cape", "cape"),
+                ("showers", "showers"),
             ):
                 series = hourly.get(source_key) if source_key else None
                 value = series[index] if isinstance(series, list) and index < len(series) else None

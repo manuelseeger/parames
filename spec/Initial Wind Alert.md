@@ -355,27 +355,49 @@ flowchart LR
 
 ### 8.6 Scoring
 
-Each candidate window receives a confidence score (0–7 scale):
+Each candidate window receives a 0–100 confidence score, computed as a
+**weighted mean of available sub-signals** with renormalisation on missing
+data. Each sub-signal yields a value in [0, 100]; signals that opt out
+(return `None`) are excluded from both numerator and denominator so the
+remaining signals naturally fill the 0–100 space.
 
-| Factor | Condition | Points |
-|---|---|---|
-| Wind strength | avg speed ≥ 10 km/h | +2 |
-| | avg speed ≥ 8 km/h | +1 |
-| Duration | ≥ 4 hours | +2 |
-| | ≥ 2 hours | +1 |
-| Bise pressure | gradient ≥ 3.0 hPa | +2 |
-| | gradient ≥ 1.5 hPa | +1 |
-| Dry conditions | enabled and precip ≤ 0.2 mm/h | +1 |
+```
+score = round( Σ(wᵢ · sᵢ) / Σ(wᵢ) )    over i where sᵢ is not None
+```
 
-Classification:
+Two flavours of signal share the same protocol:
+
+- **Quality signals** — always contribute when their data is present
+  (low sub-score drags the mean down). E.g. `wind_speed`, `wind_duration`.
+- **Corroboration signals** — only contribute when actively positive; opt
+  out when neutral so they neither help nor hurt. E.g. `bise`.
+
+Sub-signal definitions (built-ins live in `score_window`; plugins return
+their own sub-score):
+
+| Signal | Flavour | Default weight | Sub-score |
+|---|---|---|---|
+| `wind_speed` | quality | 1.0 | 0 if `<min_speed_kmh`; linear ramp to 100 at `strong_speed_kmh × 1.3` (clamped) |
+| `wind_duration` | quality | 1.0 | 0 if `<min_consecutive_hours`; 50 at `min_consecutive_hours`; linear to 100 at 4h+ |
+| `bise` (plugin) | corroboration | 0.5 | `None` if gradient `<min` or pressure missing; 75 if `≥min`; 100 if `≥3.0 hPa` |
+
+Weights are global config in `scoring.weights.*`; alert profiles do not
+override them. Adding a new plugin only requires choosing a weight — the
+denominator absorbs it, so existing weights and threshold semantics stay
+stable.
+
+Classification (configurable via `scoring.tiers`):
 
 | Score | Label |
 |---|---|
-| 0–2 | Weak candidate |
-| 3–4 | Candidate |
-| 5+ | Strong candidate |
+| < 40 | weak |
+| 40–69 | candidate |
+| 70–84 | strong |
+| ≥ 85 | excellent |
+| `None` (all signals opted out) | unavailable |
 
-Windows with score ≥ 3 are emitted as alerts.
+Windows with `score >= scoring.emit_threshold` (default 40) are emitted
+as alerts. `unavailable` windows are never emitted.
 
 ---
 
@@ -407,8 +429,9 @@ All domain objects are Pydantic `BaseModel` subclasses. The key runtime models:
 | `bise_pressure_gradient_hpa` | `float \| None` | Mean east−west gradient (if bise enabled) |
 | `models` | `list[str]` | Contributing model IDs |
 | `dry_filter_applied` | `bool` | Whether dry filter was active |
-| `score` | `int` | Confidence score |
-| `classification` | `str` | weak / candidate / strong |
+| `score` | `int \| None` | 0–100 weighted-mean composite, `None` when every signal opts out |
+| `classification` | `str` | weak / candidate / strong / excellent / unavailable |
+| `subscores` | `dict[str, float \| None]` | Per-signal sub-scores that fed the composite |
 
 `CandidateWindow` is the unit of exchange between evaluation, delivery, and (future) persistence. Every downstream consumer depends only on this model.
 
@@ -535,7 +558,7 @@ Unit tests cover all pure logic with no network I/O. Forecast data is constructe
 | **Model agreement** | Accepts when both models pass and deltas within limits. Rejects when direction delta or speed delta exceeds threshold. Bypass when `required = false`. |
 | **Bise signal** | Positive gradient detected. Below-threshold gradient rejected. Missing pressure gracefully returns `None`. |
 | **Window grouping** | Consecutive hours merge. Gaps split. Single-hour windows filtered by `min_consecutive_hours`. Empty input returns no windows. |
-| **Scoring** | Score boundaries for each factor. Classification labels at 0, 2, 3, 4, 5, 7. |
+| **Scoring** | Sub-score curves for `wind_speed` and `wind_duration`. 4-tier classification boundaries (weak/candidate/strong/excellent). Renormalisation when a plugin opts out. `unavailable` when every signal opts out. |
 | **Config validation** | Valid YAML parses. Missing required fields raise `ValidationError`. Alert-level overrides take precedence over defaults. |
 | **Vector-average direction** | Known angles produce correct mean. Wrap-around averaging (e.g. 350° + 10° → 0°). |
 

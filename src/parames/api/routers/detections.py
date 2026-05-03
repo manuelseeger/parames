@@ -9,8 +9,12 @@ router = APIRouter(prefix="/detections", tags=["detections"])
 
 
 @router.get("", response_model=list[Detection])
-async def list_detections(repo: Repo, limit: int = 100) -> list[Detection]:
-    return await repo.list_detections(limit=limit)
+async def list_detections(
+    repo: Repo,
+    limit: int = 100,
+    is_backtest: bool | None = None,
+) -> list[Detection]:
+    return await repo.list_detections(limit=limit, is_backtest=is_backtest)
 
 
 @router.get("/{detection_id}", response_model=Detection)

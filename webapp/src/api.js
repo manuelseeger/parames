@@ -41,6 +41,11 @@ export const api = {
   // dashboard
   triggerRun: () => request('/runs', { method: 'POST' }),
   listRuns: (limit = 25) => request(`/runs?limit=${limit}`),
-  listDetections: (limit = 25) => request(`/detections?limit=${limit}`),
+  listDetections: (limit = 25, isBacktest = null) => {
+    const params = new URLSearchParams({ limit });
+    if (isBacktest !== null) params.set('is_backtest', isBacktest);
+    return request(`/detections?${params}`);
+  },
+  getDetection: (id) => request(`/detections/${id}`),
   listDeliveries: (limit = 25) => request(`/deliveries?limit=${limit}`),
 };

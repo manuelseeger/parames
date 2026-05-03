@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { api } from '../api.js';
+import { navigate } from '../router.js';
 
 function fmtDateTime(iso) {
   if (!iso) return '—';
@@ -28,6 +29,7 @@ function statusPill(status) {
 }
 
 function classificationPill(c) {
+  if (c === 'excellent') return 'pill-excellent';
   if (c === 'strong') return 'pill-ok';
   if (c === 'candidate') return 'pill-warn';
   return 'pill-muted';
@@ -121,11 +123,16 @@ async function runNow() {
               <tr><th>Alert</th><th>Window</th><th>Class</th><th class="right">Score</th></tr>
             </thead>
             <tbody>
-              <tr v-for="d in detections" :key="d.id">
+              <tr
+                v-for="d in detections"
+                :key="d.id"
+                style="cursor:pointer"
+                @click="navigate(`/detections/${d.id}`)"
+              >
                 <td>{{ d.alert_name }}</td>
                 <td class="nowrap">{{ fmtTimeRange(d.start, d.end) }}</td>
                 <td><span class="pill" :class="classificationPill(d.classification)">{{ d.classification }}</span></td>
-                <td class="right">{{ d.score }}</td>
+                <td class="right">{{ d.score ?? '—' }}</td>
               </tr>
             </tbody>
           </table>

@@ -16,7 +16,7 @@ def _window(
     alert_name: str = "zurich_bise",
     start: datetime,
     duration_hours: int = 3,
-    score: int = 4,
+    score: int | None = 50,
     classification: str = "candidate",
 ) -> CandidateWindow:
     return CandidateWindow(
@@ -77,12 +77,12 @@ def test_classification_upgrade_still_dedupes() -> None:
     """v1 explicitly suppresses re-delivery on score upgrades; this guards that decision."""
     weak = _window(
         start=datetime(2026, 4, 28, 9, 0, tzinfo=ZURICH),
-        score=3,
-        classification="candidate",
+        score=30,
+        classification="weak",
     )
     strong = _window(
         start=datetime(2026, 4, 28, 9, 0, tzinfo=ZURICH),
-        score=6,
+        score=75,
         classification="strong",
     )
     assert is_same_event(weak, strong)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -38,16 +39,17 @@ class SnapshotForecastClient:
         *,
         location: LocationConfig,
         model: str,
-        hourly_variables: list[str],
+        hourly_variables: Iterable[str],
         forecast_days: int = 3,
         timezone: str = ZURICH_TIMEZONE,
     ) -> dict[datetime, HourForecast]:
         del forecast_days
+        variables = list(hourly_variables)
         for request in self.metadata["requests"]:
             if (
                 request["location"]["name"] == location.name
                 and request["model"] == model
-                and request["hourly_variables"] == hourly_variables
+                and request["hourly_variables"] == variables
             ):
                 payload = self._payloads[request["name"]]
                 return self._normalizer._normalize_hourly_payload(payload, timezone)
