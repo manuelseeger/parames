@@ -89,6 +89,13 @@ class ModelHourForecast(MainBaseModel):
     showers: float | None = None
 
 
+class ModelForecastSeries(MainBaseModel):
+    """Per-model hourly forecast series, used in EvaluationReport.raw_forecasts."""
+
+    model: str
+    hours: list[ModelHourForecast]
+
+
 class EvaluationReport(MainBaseModel):
     schema_version: int = 1
     profile_snapshot: dict[str, Any]
@@ -96,9 +103,23 @@ class EvaluationReport(MainBaseModel):
     horizon_end: datetime
     forecast_models: list[str]
     hour_evaluations: list[HourEvaluation] = []
-    raw_forecasts: dict[str, list[ModelHourForecast]] = {}
+    raw_forecasts: list[ModelForecastSeries] = []
     scoring: ScoringTrace
-    plugin_reports: dict[str, PluginReport] = {}
+    plugin_reports: list[PluginReport] = []
+
+    @field_validator("raw_forecasts", mode="before")
+    @classmethod
+    def _migrate_raw_forecasts(cls, v: Any) -> Any:
+        if isinstance(v, dict):
+            return [{"model": model, "hours": hours} for model, hours in v.items()]
+        return v
+
+    @field_validator("plugin_reports", mode="before")
+    @classmethod
+    def _migrate_plugin_reports(cls, v: Any) -> Any:
+        if isinstance(v, dict):
+            return list(v.values())
+        return v
 
 
 class CandidateWindow(MainBaseModel):
@@ -120,6 +141,8 @@ class CandidateWindow(MainBaseModel):
     subscores: dict[str, float | None] = {}
     hours: list[WindowHour] = []
     plugin_outputs: dict[str, dict[str, Any]] = {}
+
+    report: EvaluationReport | None = None
 
     @field_validator("plugin_outputs", mode="before")
     @classmethod

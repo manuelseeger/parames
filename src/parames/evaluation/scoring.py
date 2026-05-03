@@ -4,11 +4,21 @@ from datetime import timedelta
 from typing import Any
 
 from parames.config import AlertProfileConfig, ScoringConfig
-from parames.domain import CandidateWindow, Classification, WindowHour
+from parames.domain import (
+    CandidateWindow,
+    Classification,
+    EvaluationReport,
+    HourEvaluation,
+    ModelForecastSeries,
+    PluginReport,
+    ScoringTrace,
+    WindowHour,
+)
 from parames.evaluation.direction import vector_average_direction
 from parames.evaluation.wind import subscore_wind_speed, subscore_wind_duration
 from parames.evaluation.windows import EvaluatedHour
 from parames.plugins import EvaluationPlugin
+from parames.plugins.base import PluginScoringResult
 
 import logging
 
@@ -26,26 +36,6 @@ def _classify(score: int | None, tiers) -> Classification:
     if score >= tiers.candidate_min:
         return Classification.candidate
     return Classification.weak
-
-
-def _aggregate_subscores(
-    subscores: dict[str, float | None],
-    weights: dict[str, float],
-) -> int | None:
-    weighted_sum = 0.0
-    weight_total = 0.0
-    for name, value in subscores.items():
-        if value is None:
-            continue
-        w = weights.get(name, 0.0)
-        if w <= 0:
-            continue
-        weighted_sum += w * value
-        weight_total += w
-    if weight_total == 0:
-        return None
-    raw = weighted_sum / weight_total
-    return max(0, min(100, round(raw)))
 
 
 def _build_weight_map(
@@ -78,6 +68,8 @@ def build_candidate_windows(
     plugins: list[EvaluationPlugin] | None = None,
     plugin_data: dict[str, Any] | None = None,
     scoring: ScoringConfig | None = None,
+    hour_evaluations: list[HourEvaluation] | None = None,
+    raw_forecasts: list[ModelForecastSeries] | None = None,
 ) -> list[CandidateWindow]:
     if not accepted_hours:
         return []
@@ -97,6 +89,8 @@ def build_candidate_windows(
             plugins=plugins or [],
             plugin_data=plugin_data or {},
             scoring=effective_scoring,
+            hour_evaluations=hour_evaluations,
+            raw_forecasts=raw_forecasts,
         )
         for window in windows
         if len(window) >= profile.wind.min_consecutive_hours
@@ -110,6 +104,8 @@ def score_window(
     plugins: list[EvaluationPlugin] | None = None,
     plugin_data: dict[str, Any] | None = None,
     scoring: ScoringConfig | None = None,
+    hour_evaluations: list[HourEvaluation] | None = None,
+    raw_forecasts: list[ModelForecastSeries] | None = None,
 ) -> CandidateWindow:
     plugins = plugins or []
     plugin_data = plugin_data or {}
@@ -138,19 +134,78 @@ def score_window(
     }
 
     plugin_outputs: dict[str, dict[str, Any]] = {}
+    plugin_reports: list[PluginReport] = []
     for plugin in plugins:
-        sub_score, output = plugin.score_window(
+        result: PluginScoringResult = plugin.score_window(
             window_times=[hour.time for hour in hours],
             prefetched=plugin_data.get(plugin.type),
             contributing_models=contributing_models,
         )
-        subscores[plugin.type] = sub_score
-        if output:
-            plugin_outputs[plugin.type] = output
+        subscores[plugin.type] = result.sub_score
+        if result.output:
+            plugin_outputs[plugin.type] = result.output
+        if result.report is not None:
+            plugin_reports.append(result.report)
 
     weights = _build_weight_map(plugins, effective_scoring)
-    score = _aggregate_subscores(subscores, weights)
+
+    # Compute contributions and aggregate
+    weighted_sum = 0.0
+    weight_total = 0.0
+    contributions: dict[str, dict[str, Any]] = {}
+    for name, value in subscores.items():
+        w = weights.get(name, 0.0)
+        included = value is not None and w > 0
+        if included:
+            weighted_sum += w * value  # type: ignore[operator]
+            weight_total += w
+        contributions[name] = {
+            "weight": w,
+            "sub_score": value,
+            "weighted_value": round(w * value, 4) if included else None,  # type: ignore[operator]
+            "included": included,
+        }
+
+    raw_score = weighted_sum / weight_total if weight_total > 0 else None
+    score = max(0, min(100, round(raw_score))) if raw_score is not None else None
     classification = _classify(score, effective_scoring.tiers)
+
+    scoring_trace = ScoringTrace(
+        weights=weights,
+        subscores=subscores,
+        contributions=contributions,
+        weight_total=round(weight_total, 4),
+        weighted_sum=round(weighted_sum, 4),
+        raw_score=round(raw_score, 2) if raw_score is not None else None,
+        final_score=score,
+        classification=classification,
+        tiers={
+            "candidate_min": effective_scoring.tiers.candidate_min,
+            "strong_min": effective_scoring.tiers.strong_min,
+            "excellent_min": effective_scoring.tiers.excellent_min,
+        },
+    )
+
+    eff_hour_evals = hour_evaluations or []
+    eff_raw_forecasts = raw_forecasts or []
+
+    if eff_hour_evals:
+        horizon_start = min(e.time for e in eff_hour_evals)
+        horizon_end = max(e.time for e in eff_hour_evals)
+    else:
+        horizon_start = hours[0].time
+        horizon_end = hours[-1].time
+
+    report = EvaluationReport(
+        profile_snapshot=profile.model_dump(mode="json"),
+        horizon_start=horizon_start,
+        horizon_end=horizon_end,
+        forecast_models=[s.model for s in eff_raw_forecasts] or contributing_models,
+        hour_evaluations=eff_hour_evals,
+        raw_forecasts=eff_raw_forecasts,
+        scoring=scoring_trace,
+        plugin_reports=plugin_reports,
+    )
 
     window_hours = [
         WindowHour(
@@ -178,4 +233,5 @@ def score_window(
         subscores=subscores,
         hours=window_hours,
         plugin_outputs=plugin_outputs,
+        report=report,
     )

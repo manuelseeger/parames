@@ -9,6 +9,28 @@ from parames.evaluation.direction import angular_distance, direction_in_range
 from parames.config import ModelAgreementConfig
 
 
+def evaluate_hour_reasons(
+    hour: HourForecast,
+    *,
+    wind: WindConfig,
+    time_window: TimeWindowConfig | None,
+    dry: DryConfig | None,  # noqa: ARG001
+) -> tuple[bool, list[str]]:
+    """Return (passed, rejection_reasons) for per-model hour gating."""
+    reasons: list[str] = []
+    if time_window is not None and not (
+        time_window.start_hour <= hour.time.hour < time_window.end_hour
+    ):
+        reasons.append("out_of_time_window")
+    if hour.wind_speed is None or hour.wind_speed < wind.min_speed_kmh:
+        reasons.append("wind_below_min")
+    elif hour.wind_direction is None or not direction_in_range(
+        hour.wind_direction, wind.direction_min_deg, wind.direction_max_deg
+    ):
+        reasons.append("wind_direction_out_of_range")
+    return not bool(reasons), reasons
+
+
 def evaluate_hour_candidate(
     hour: HourForecast,
     *,
@@ -16,17 +38,8 @@ def evaluate_hour_candidate(
     time_window: TimeWindowConfig | None,
     dry: DryConfig | None,
 ) -> bool:
-    if time_window is not None and not (
-        time_window.start_hour <= hour.time.hour < time_window.end_hour
-    ):
-        return False
-    if hour.wind_speed is None or hour.wind_speed < wind.min_speed_kmh:
-        return False
-    if hour.wind_direction is None or not direction_in_range(
-        hour.wind_direction, wind.direction_min_deg, wind.direction_max_deg
-    ):
-        return False
-    return True
+    passed, _ = evaluate_hour_reasons(hour, wind=wind, time_window=time_window, dry=dry)
+    return passed
 
 
 def models_agree(hours: list[HourForecast], agreement: ModelAgreementConfig) -> bool:

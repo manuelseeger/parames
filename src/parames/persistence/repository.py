@@ -90,12 +90,19 @@ class AlertRepository:
 
     # ------------- Runs -------------
 
-    async def start_run(self, *, config_path: str, alert_definition_ids: list) -> Run:
+    async def start_run(
+        self,
+        *,
+        config_path: str,
+        alert_definition_ids: list,
+        is_backtest: bool = False,
+    ) -> Run:
         run = Run(
             started_at=_utcnow(),
             status="running",
             config_path=config_path,
             alert_definition_ids=alert_definition_ids,
+            is_backtest=is_backtest,
         )
         await self._engine.save(run)
         return run
@@ -128,13 +135,14 @@ class AlertRepository:
     # ------------- Detections (formerly alerts) -------------
 
     async def find_matching_detection(
-        self, alert_name: str, window: CandidateWindow
+        self, alert_name: str, window: CandidateWindow, *, is_backtest: bool = False
     ) -> Detection | None:
         query = (
             (Detection.alert_name == alert_name)
             & (Detection.local_date == local_date_for_window(window))
             & (Detection.start < window.end)
             & (Detection.end > window.start)
+            & (Detection.is_backtest == is_backtest)
         )
         return await self._engine.find_one(Model=Detection, query=query)
 
@@ -145,6 +153,7 @@ class AlertRepository:
         alert_definition_id,
         run_id,
         existing: Detection | None,
+        is_backtest: bool = False,
     ) -> Detection:
         if existing is None:
             doc = Detection(
@@ -158,6 +167,7 @@ class AlertRepository:
                 first_seen_run_id=run_id,
                 last_seen_run_id=run_id,
                 seen_count=1,
+                is_backtest=is_backtest,
                 window=window,
             )
         else:
@@ -172,8 +182,11 @@ class AlertRepository:
         await self._engine.save(doc)
         return doc
 
-    async def list_detections(self, *, limit: int = 100) -> list[Detection]:
-        results = await self._engine.find_many(Model=Detection, raw_sort={"start": -1})
+    async def list_detections(
+        self, *, limit: int = 100, is_backtest: bool | None = None
+    ) -> list[Detection]:
+        query = None if is_backtest is None else (Detection.is_backtest == is_backtest)
+        results = await self._engine.find_many(Model=Detection, query=query, raw_sort={"start": -1})
         return list(results)[:limit]
 
     async def get_detection(self, detection_id) -> Detection | None:

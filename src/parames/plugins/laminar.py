@@ -7,9 +7,9 @@ from pydantic import Field
 from pyodmongo import MainBaseModel
 
 from parames.common import LocationConfig
-from parames.domain import HourForecast
+from parames.domain import HourForecast, PluginReport, RuleEvaluation
 from parames.forecast import ForecastClient
-from parames.plugins.base import PluginConfigBase, register_plugin
+from parames.plugins.base import PluginConfigBase, PluginScoringResult, register_plugin
 
 
 class GustFactorThresholds(MainBaseModel):
@@ -159,21 +159,31 @@ class LaminarPlugin:
         window_times: list[datetime],
         prefetched: LaminarPrefetched,
         contributing_models: list[str],
-    ) -> tuple[float | None, dict[str, Any]]:
+    ) -> PluginScoringResult:
         # Local import avoids circular dependency (evaluation.py imports parames.plugins).
         from parames.evaluation import angular_distance, vector_average_direction
 
         cfg = self.config
         reasons: list[str] = []
+        rules: list[RuleEvaluation] = []
 
         # 1. Resolve primary model
+        primary_substituted = False
         if cfg.primary_model and cfg.primary_model in contributing_models:
             primary = cfg.primary_model
         elif cfg.primary_model and cfg.primary_model not in contributing_models:
             primary = contributing_models[0]
             reasons.append("primary_model_substituted")
+            primary_substituted = True
         else:
             primary = contributing_models[0]
+
+        rules.append(RuleEvaluation(
+            name="primary_model_resolution",
+            observed=primary,
+            outcome="info",
+            message="primary_model_substituted" if primary_substituted else None,
+        ))
 
         # 2. Resolve secondary model
         secondary: str | None = None
@@ -184,6 +194,12 @@ class LaminarPlugin:
                 if candidate in prefetched.data:
                     secondary = candidate
                     break
+
+        rules.append(RuleEvaluation(
+            name="secondary_model_resolution",
+            observed=secondary,
+            outcome="info",
+        ))
 
         # 3. Required-data gate (wind_speed, wind_direction, wind_gusts must be present
         #    for every hour in the window from the primary model)
@@ -196,14 +212,24 @@ class LaminarPlugin:
                 or h.wind_direction is None
                 or h.wind_gusts is None
             ):
-                return (
-                    None,
-                    {
-                        "score": None,
-                        "label": "unavailable",
-                        "reasons": ["missing_required_wind_data"],
-                    },
+                unavail_output = {
+                    "score": None,
+                    "label": "unavailable",
+                    "reasons": ["missing_required_wind_data"],
+                }
+                plugin_report = PluginReport(
+                    type="laminar",
+                    summary="unavailable — missing required wind/gust data",
+                    config_snapshot=cfg.model_dump(mode="json"),
+                    inputs={"primary_model": primary, "secondary_model": secondary},
+                    rules=rules + [RuleEvaluation(
+                        name="data_gate",
+                        observed="missing_required_wind_data",
+                        outcome="fail",
+                        message=f"Primary model {primary!r} is missing wind/gust data",
+                    )],
                 )
+                return PluginScoringResult(sub_score=None, output=unavail_output, report=plugin_report)
 
         window_hours = [primary_hours[ts] for ts in window_times]
         score = 100.0
@@ -225,16 +251,39 @@ class LaminarPlugin:
         if max_gust_factor > cfg.gust_factor.marginal_max:
             score -= 35
             reasons.append("very_gusty")
+            gf_outcome, gf_delta = "fail", -35.0
         elif max_gust_factor > cfg.gust_factor.good_max:
             score -= 15
             reasons.append("high_gust_factor")
+            gf_outcome, gf_delta = "warn", -15.0
         else:
             reasons.append("low_gust_factor")
+            gf_outcome, gf_delta = "pass", 0.0
+
+        rules.append(RuleEvaluation(
+            name="gust_factor",
+            observed=round(max_gust_factor, 3),
+            threshold={"good_max": cfg.gust_factor.good_max, "marginal_max": cfg.gust_factor.marginal_max},
+            outcome=gf_outcome,
+            delta=gf_delta,
+        ))
 
         if max_gust_spread_kmh > cfg.gust_spread_kmh.marginal_max:
             score -= 25
+            gs_outcome, gs_delta = "fail", -25.0
         elif max_gust_spread_kmh > cfg.gust_spread_kmh.good_max:
             score -= 10
+            gs_outcome, gs_delta = "warn", -10.0
+        else:
+            gs_outcome, gs_delta = "pass", 0.0
+
+        rules.append(RuleEvaluation(
+            name="gust_spread",
+            observed=round(max_gust_spread_kmh, 2),
+            threshold={"good_max": cfg.gust_spread_kmh.good_max, "marginal_max": cfg.gust_spread_kmh.marginal_max},
+            outcome=gs_outcome,
+            delta=gs_delta,
+        ))
 
         # 4b. Direction stability
         directions: list[float] = [h.wind_direction for h in window_hours]  # type: ignore[misc]
@@ -246,11 +295,22 @@ class LaminarPlugin:
         if direction_variability_deg > cfg.direction_variability_deg.marginal_max:
             score -= 25
             reasons.append("very_shifty")
+            dv_outcome, dv_delta = "fail", -25.0
         elif direction_variability_deg > cfg.direction_variability_deg.good_max:
             score -= 10
             reasons.append("shifting_direction")
+            dv_outcome, dv_delta = "warn", -10.0
         else:
             reasons.append("stable_direction")
+            dv_outcome, dv_delta = "pass", 0.0
+
+        rules.append(RuleEvaluation(
+            name="direction_variability",
+            observed=round(direction_variability_deg, 1),
+            threshold={"good_max": cfg.direction_variability_deg.good_max, "marginal_max": cfg.direction_variability_deg.marginal_max},
+            outcome=dv_outcome,
+            delta=dv_delta,
+        ))
 
         # 4c. Speed stability
         speeds: list[float] = [h.wind_speed for h in window_hours]  # type: ignore[misc]
@@ -261,17 +321,35 @@ class LaminarPlugin:
         if speed_range_kmh > cfg.speed_range_kmh.marginal_max:
             score -= 20
             reasons.append("high_speed_range")
+            sr_outcome, sr_delta = "fail", -20.0
         elif speed_range_kmh > cfg.speed_range_kmh.good_max:
             score -= 8
             reasons.append("high_speed_range")
+            sr_outcome, sr_delta = "warn", -8.0
         else:
             reasons.append("low_speed_range")
+            sr_outcome, sr_delta = "pass", 0.0
+
+        rules.append(RuleEvaluation(
+            name="speed_range",
+            observed=round(speed_range_kmh, 2),
+            threshold={"good_max": cfg.speed_range_kmh.good_max, "marginal_max": cfg.speed_range_kmh.marginal_max},
+            outcome=sr_outcome,
+            delta=sr_delta,
+        ))
 
         # 4d. Convective risk (CAPE)
         cape_values = [h.cape for h in window_hours if h.cape is not None]
         cape_available = len(cape_values) > len(window_hours) / 2
         max_cape: float | None = None
         avg_cape: float | None = None
+
+        rules.append(RuleEvaluation(
+            name="cape_availability",
+            observed=f"{len(cape_values)}/{len(window_hours)} hours have CAPE data",
+            outcome="pass" if cape_available else "info",
+        ))
+
         if not cape_available:
             reasons.append("cape_unavailable")
         else:
@@ -280,11 +358,22 @@ class LaminarPlugin:
             if max_cape > cfg.cape_j_kg.marginal_max:
                 score -= 25
                 reasons.append("high_cape")
+                cape_outcome, cape_delta = "fail", -25.0
             elif max_cape > cfg.cape_j_kg.good_max:
                 score -= 10
                 reasons.append("moderate_cape")
+                cape_outcome, cape_delta = "warn", -10.0
             else:
                 reasons.append("low_cape")
+                cape_outcome, cape_delta = "pass", 0.0
+
+            rules.append(RuleEvaluation(
+                name="cape",
+                observed=round(max_cape, 1),
+                threshold={"good_max": cfg.cape_j_kg.good_max, "marginal_max": cfg.cape_j_kg.marginal_max},
+                outcome=cape_outcome,
+                delta=cape_delta,
+            ))
 
         # 4e. Precipitation / shower risk
         max_precipitation = max((h.precipitation or 0.0) for h in window_hours)
@@ -292,12 +381,36 @@ class LaminarPlugin:
         if max_precipitation > cfg.precipitation.max_precip_mm_h:
             score -= 30
             reasons.append("precipitation_risk")
-        elif max_showers > cfg.precipitation.max_showers_mm_h:
+            precip_outcome, precip_delta = "fail", -30.0
+        else:
+            precip_outcome, precip_delta = "pass", 0.0
+
+        rules.append(RuleEvaluation(
+            name="precipitation",
+            observed=round(max_precipitation, 3),
+            threshold=cfg.precipitation.max_precip_mm_h,
+            outcome=precip_outcome,
+            delta=precip_delta,
+        ))
+
+        if max_showers > cfg.precipitation.max_showers_mm_h:
             score -= 30
             reasons.append("showers_risk")
+            showers_outcome, showers_delta = "fail", -30.0
+        else:
+            showers_outcome, showers_delta = "pass", 0.0
+
+        rules.append(RuleEvaluation(
+            name="showers",
+            observed=round(max_showers, 3),
+            threshold=cfg.precipitation.max_showers_mm_h,
+            outcome=showers_outcome,
+            delta=showers_delta,
+        ))
 
         # 4f. Pressure tendency (3h window starting at window_start)
         pressure_tendency_3h_hpa: float | None = None
+        pressure_tendency_fallback = False
         pressure_available = any(
             primary_hours.get(ts) is not None
             and primary_hours[ts].pressure_msl is not None
@@ -305,6 +418,12 @@ class LaminarPlugin:
         )
         if not pressure_available:
             reasons.append("pressure_unavailable")
+            rules.append(RuleEvaluation(
+                name="pressure_tendency",
+                observed=None,
+                outcome="info",
+                message="pressure data unavailable",
+            ))
         else:
             window_start = window_times[0]
             target_time = window_start + timedelta(hours=3)
@@ -332,17 +451,30 @@ class LaminarPlugin:
                         pressure_tendency_3h_hpa = (p_last - p_first) * (
                             3.0 / duration_h
                         )
+                        pressure_tendency_fallback = True
 
             if pressure_tendency_3h_hpa is not None:
                 abs_tendency = abs(pressure_tendency_3h_hpa)
                 if abs_tendency > cfg.pressure_tendency_3h_hpa.marginal_max_abs:
                     score -= 15
                     reasons.append("pressure_unstable")
+                    pt_outcome, pt_delta = "fail", -15.0
                 elif abs_tendency > cfg.pressure_tendency_3h_hpa.good_max_abs:
                     score -= 5
                     reasons.append("pressure_unstable")
+                    pt_outcome, pt_delta = "warn", -5.0
                 else:
                     reasons.append("pressure_stable")
+                    pt_outcome, pt_delta = "pass", 0.0
+
+                rules.append(RuleEvaluation(
+                    name="pressure_tendency",
+                    observed=round(pressure_tendency_3h_hpa, 2),
+                    threshold={"good_max_abs": cfg.pressure_tendency_3h_hpa.good_max_abs, "marginal_max_abs": cfg.pressure_tendency_3h_hpa.marginal_max_abs},
+                    outcome=pt_outcome,
+                    delta=pt_delta,
+                    message="fallback_scaled" if pressure_tendency_fallback else None,
+                ))
 
         # 4g. Model agreement (primary vs secondary)
         model_dir_delta_deg: float | None = None
@@ -350,6 +482,13 @@ class LaminarPlugin:
         if secondary is None:
             score -= 10
             reasons.append("secondary_model_unavailable")
+            rules.append(RuleEvaluation(
+                name="model_agreement",
+                observed=None,
+                outcome="warn",
+                delta=-10.0,
+                message="no secondary model available",
+            ))
         else:
             secondary_hours = prefetched.data.get(secondary, {})
             dir_deltas: list[float] = []
@@ -388,19 +527,43 @@ class LaminarPlugin:
                     and speed_stat <= ma.speed_good_max_kmh
                 ):
                     reasons.append("model_agreement_good")
+                    ma_outcome, ma_delta = "pass", 0.0
                 elif (
                     dir_stat <= ma.direction_marginal_max_deg
                     and speed_stat <= ma.speed_marginal_max_kmh
                 ):
                     score -= 10
                     reasons.append("model_disagreement")
+                    ma_outcome, ma_delta = "warn", -10.0
                 else:
                     score -= 25
                     reasons.append("model_disagreement")
+                    ma_outcome, ma_delta = "fail", -25.0
+
+                rules.append(RuleEvaluation(
+                    name="model_agreement",
+                    observed={"dir_delta": round(dir_stat, 1), "speed_delta": round(speed_stat, 2)},
+                    threshold={
+                        "direction_good_max_deg": ma.direction_good_max_deg,
+                        "speed_good_max_kmh": ma.speed_good_max_kmh,
+                        "direction_marginal_max_deg": ma.direction_marginal_max_deg,
+                        "speed_marginal_max_kmh": ma.speed_marginal_max_kmh,
+                    },
+                    outcome=ma_outcome,
+                    delta=ma_delta,
+                    message=f"using {'p75' if use_percentile else 'max'} of {len(dir_deltas)} hour pairs",
+                ))
             else:
                 # No overlapping data between models — treat as unavailable
                 score -= 10
                 reasons.append("secondary_model_unavailable")
+                rules.append(RuleEvaluation(
+                    name="model_agreement",
+                    observed=None,
+                    outcome="warn",
+                    delta=-10.0,
+                    message="no overlapping data between primary and secondary",
+                ))
 
         # Clamp and build result
         score = max(0.0, min(100.0, score))
@@ -433,4 +596,47 @@ class LaminarPlugin:
             "secondary_model": secondary,
         }
 
-        return (score, output)
+        # Build per-hour trace for PluginReport
+        secondary_hours_map = prefetched.data.get(secondary, {}) if secondary else {}
+        hourly: list[dict[str, Any]] = []
+        for i, (ts, h) in enumerate(zip(window_times, window_hours)):
+            sh = secondary_hours_map.get(ts)
+            hour_entry: dict[str, Any] = {
+                "time": ts.isoformat(),
+                "gust_factor": round(gust_factors[i], 3),
+                "gust_spread_kmh": round(gust_spreads[i], 2),
+                "primary": {
+                    "wind_speed": h.wind_speed,
+                    "wind_direction": h.wind_direction,
+                    "wind_gusts": h.wind_gusts,
+                    "cape": h.cape,
+                    "pressure_msl": h.pressure_msl,
+                },
+            }
+            if sh is not None:
+                hour_entry["secondary"] = {
+                    "wind_speed": sh.wind_speed,
+                    "wind_direction": sh.wind_direction,
+                    "wind_gusts": sh.wind_gusts,
+                }
+                if sh.wind_direction is not None and h.wind_direction is not None:
+                    hour_entry["dir_delta"] = round(angular_distance(h.wind_direction, sh.wind_direction), 1)
+                if sh.wind_speed is not None and h.wind_speed is not None:
+                    hour_entry["speed_delta"] = round(abs(h.wind_speed - sh.wind_speed), 2)
+            hourly.append(hour_entry)
+
+        plugin_report = PluginReport(
+            type="laminar",
+            summary=f"score={round(score)} label={label}",
+            config_snapshot=cfg.model_dump(mode="json"),
+            inputs={
+                "primary_model": primary,
+                "secondary_model": secondary,
+                "contributing_models": contributing_models,
+            },
+            metrics=metrics,
+            hourly=hourly,
+            rules=rules,
+        )
+
+        return PluginScoringResult(sub_score=score, output=output, report=plugin_report)

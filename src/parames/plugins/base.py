@@ -18,18 +18,23 @@ class PluginConfigBase(MainBaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class PluginScoringResult(MainBaseModel):
+    sub_score: float | None
+    output: dict[str, Any] = {}
+    report: Any | None = None  # PluginReport — typed as Any to avoid circular import
+
+
 @runtime_checkable
 class EvaluationPlugin(Protocol):
     """A pluggable extra evaluation slotted into an alert profile.
 
     Lifecycle per evaluation run:
       1. `prefetch` — fetch any extra forecast data the plugin needs.
-      2. `score_window` — at window-scoring time, return a (sub_score, output_dict).
+      2. `score_window` — at window-scoring time, return a PluginScoringResult.
          `sub_score` is a float in [0, 100] that participates in the weighted-mean
-         aggregator, or `None` to opt out of this window (for "corroboration"
-         signals like Bise that should only contribute when actively positive,
-         and for any signal whose data is missing).
-         The output_dict is stored on `CandidateWindow.plugin_outputs[type]`.
+         aggregator, or `None` to opt out of this window.
+         `output` is stored on `CandidateWindow.plugin_outputs[type]`.
+         `report` is appended to `EvaluationReport.plugin_reports`.
 
     Per-plugin weight is global config, looked up from
     `ScoringConfig.weights.plugins[type]` at aggregation time.
@@ -48,7 +53,7 @@ class EvaluationPlugin(Protocol):
         window_times: list[datetime],
         prefetched: Any,
         contributing_models: list[str],
-    ) -> tuple[float | None, dict[str, Any]]: ...
+    ) -> PluginScoringResult: ...
 
 
 PLUGIN_REGISTRY: dict[str, type[EvaluationPlugin]] = {}

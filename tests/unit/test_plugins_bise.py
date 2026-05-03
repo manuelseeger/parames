@@ -41,42 +41,42 @@ def test_bise_below_threshold_opts_out() -> None:
     """Below-min gradient: corroboration absent → opt out (None) but still report value."""
     plugin = BisePlugin(_config(min_hpa=2.0))
     pre = _prefetched(west_hpa=1013.0, east_hpa=1014.0)  # gradient = 1.0 < 2.0
-    sub_score, output = plugin.score_window(
+    result = plugin.score_window(
         window_times=[TS], prefetched=pre, contributing_models=["icon_d2"]
     )
-    assert sub_score is None
+    assert result.sub_score is None
     # Gradient is always reported for display, even when corroboration is absent.
-    assert output["gradient_hpa"] == pytest.approx(1.0)
+    assert result.output["gradient_hpa"] == pytest.approx(1.0)
 
 
 def test_bise_above_threshold_returns_75() -> None:
     plugin = BisePlugin(_config(min_hpa=1.5))
     pre = _prefetched(west_hpa=1013.0, east_hpa=1015.0)  # gradient = 2.0 ≥ 1.5
-    sub_score, output = plugin.score_window(
+    result = plugin.score_window(
         window_times=[TS], prefetched=pre, contributing_models=["icon_d2"]
     )
-    assert sub_score == pytest.approx(75.0)
-    assert output["gradient_hpa"] == pytest.approx(2.0)
+    assert result.sub_score == pytest.approx(75.0)
+    assert result.output["gradient_hpa"] == pytest.approx(2.0)
 
 
 def test_bise_strong_gradient_returns_100() -> None:
     plugin = BisePlugin(_config(min_hpa=1.5))
     pre = _prefetched(west_hpa=1010.0, east_hpa=1013.5)  # gradient = 3.5 ≥ 3.0
-    sub_score, output = plugin.score_window(
+    result = plugin.score_window(
         window_times=[TS], prefetched=pre, contributing_models=["icon_d2"]
     )
-    assert sub_score == pytest.approx(100.0)
-    assert output["gradient_hpa"] == pytest.approx(3.5)
+    assert result.sub_score == pytest.approx(100.0)
+    assert result.output["gradient_hpa"] == pytest.approx(3.5)
 
 
 def test_missing_pressure_data_opts_out() -> None:
     plugin = BisePlugin(_config())
     empty = BisePrefetched(west={}, east={})
-    sub_score, output = plugin.score_window(
+    result = plugin.score_window(
         window_times=[TS], prefetched=empty, contributing_models=["icon_d2"]
     )
-    assert sub_score is None
-    assert output == {}
+    assert result.sub_score is None
+    assert result.output == {}
 
 
 def test_disabled_plugin_reports_enabled_false() -> None:

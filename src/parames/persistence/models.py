@@ -61,6 +61,7 @@ class Run(DbModel):
     windows_found: int = 0
     deliveries_attempted: int = 0
     deliveries_suppressed: int = 0
+    is_backtest: bool = False
 
     _collection: ClassVar = "runs"
     _indexes: ClassVar = [
@@ -80,6 +81,7 @@ class Detection(DbModel):
     first_seen_run_id: Id
     last_seen_run_id: Id
     seen_count: int = 1
+    is_backtest: bool = False
     window: CandidateWindow
 
     _collection: ClassVar = "detections"

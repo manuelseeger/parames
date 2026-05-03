@@ -1,11 +1,13 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { api } from '../api.js';
+import AnalysisTab from './detection/AnalysisTab.vue';
 
 const props = defineProps({ id: String });
 
 const detection = ref(null);
 const error = ref(null);
+const activeTab = ref('overview');
 
 onMounted(async () => {
   try {
@@ -186,7 +188,7 @@ const hourlyArrows = computed(() => {
     <div v-else-if="!detection" class="spinner">Loading…</div>
 
     <template v-else>
-      <!-- Header ────────────────────────────────────────────────────── -->
+      <!-- Header ────────────────────────────────────────────────���───── -->
       <div class="detection-detail-header">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round">
           <path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/>
@@ -235,205 +237,227 @@ const hourlyArrows = computed(() => {
         </div>
       </div>
 
-      <!-- Wind speed chart ───────────────────────────────────────────── -->
-      <div v-if="windChart" class="chart-section">
-        <h3>Wind Speed</h3>
-        <svg
-          :viewBox="`0 0 ${WIND_SVG_W} ${WIND_SVG_H}`"
-          class="chart-svg"
-          :style="`max-height:${WIND_SVG_H}px`"
-        >
-          <!-- Horizontal grid lines -->
-          <line
-            v-for="yl in windChart.yLabels"
-            :key="`wg${yl.value}`"
-            :x1="WML" :y1="yl.y"
-            :x2="WIND_SVG_W - WMR" :y2="yl.y"
-            stroke="#e4e7eb" stroke-width="1"
-          />
-          <!-- In-window highlight band -->
-          <rect
-            v-if="windChart.windowBand"
-            :x="windChart.windowBand.x" :y="WMT"
-            :width="windChart.windowBand.width" :height="WPH"
-            fill="#eff6ff"
-          />
-          <!-- Area fill under the line -->
-          <path :d="windChart.areaPath" fill="#bfdbfe" fill-opacity="0.5"/>
-          <!-- Wind speed line -->
-          <path
-            :d="windChart.linePath"
-            fill="none"
-            stroke="#2563eb"
-            stroke-width="2"
-            stroke-linejoin="round"
-            stroke-linecap="round"
-          />
-          <!-- Data point dots -->
-          <circle
-            v-for="(pt, i) in windChart.pts"
-            :key="`wpt${i}`"
-            :cx="pt.x" :cy="pt.y" r="2.5"
-            :fill="pt.inWindow ? '#2563eb' : '#93c5fd'"
-            stroke="#fff" stroke-width="1.5"
-          />
-          <!-- Y axis -->
-          <line :x1="WML" :y1="WMT" :x2="WML" :y2="WBOTTOM" stroke="#cbd2d9" stroke-width="1"/>
-          <text
-            v-for="yl in windChart.yLabels"
-            :key="`wyl${yl.value}`"
-            :x="WML - 5" :y="+yl.y + 4"
-            text-anchor="end" font-size="10" fill="#7b8794"
-          >{{ yl.value }}</text>
-          <!-- Y axis unit -->
-          <text
-            :x="10" :y="WMT + WPH / 2 + 4"
-            text-anchor="middle" font-size="10" fill="#7b8794"
-            :transform="`rotate(-90, 10, ${WMT + WPH / 2})`"
-          >km/h</text>
-          <!-- X axis -->
-          <line :x1="WML" :y1="WBOTTOM" :x2="WIND_SVG_W - WMR" :y2="WBOTTOM" stroke="#cbd2d9" stroke-width="1"/>
-          <text
-            v-for="(xl, i) in windChart.xLabels"
-            :key="`wxl${i}`"
-            :x="xl.x" :y="WBOTTOM + 14"
-            text-anchor="middle" font-size="10" fill="#7b8794"
-          >{{ xl.label }}</text>
-        </svg>
+      <!-- Tab strip ──────────────────────────────────────────────────── -->
+      <div class="tab-strip">
+        <button
+          class="tab-btn"
+          :class="{ active: activeTab === 'overview' }"
+          @click="activeTab = 'overview'"
+        >Overview</button>
+        <button
+          class="tab-btn"
+          :class="{ active: activeTab === 'analysis' }"
+          @click="activeTab = 'analysis'"
+        >Analysis</button>
       </div>
 
-      <!-- Wind direction ──────────────────────────────────────────────── -->
-      <div class="chart-section">
-        <h3>Wind Direction</h3>
-        <div class="direction-row">
-          <!-- Compass rose -->
-          <div class="compass-wrap">
-            <svg viewBox="0 0 96 96" width="96" height="96">
-              <!-- Background circle -->
-              <circle cx="48" cy="48" r="42" fill="#f9fafb" stroke="#e4e7eb" stroke-width="1.5"/>
-              <!-- Intercardinal tick marks -->
-              <line x1="48" y1="10" x2="48" y2="17" stroke="#e4e7eb" stroke-width="1.5"/>
-              <line x1="86" y1="48" x2="79" y2="48" stroke="#e4e7eb" stroke-width="1.5"/>
-              <line x1="48" y1="86" x2="48" y2="79" stroke="#e4e7eb" stroke-width="1.5"/>
-              <line x1="10" y1="48" x2="17" y2="48" stroke="#e4e7eb" stroke-width="1.5"/>
-              <!-- Cardinal labels -->
-              <text x="48" y="9" text-anchor="middle" font-size="10" font-weight="700" fill="#52606d">N</text>
-              <text x="88" y="51" text-anchor="start" font-size="10" font-weight="700" fill="#52606d">E</text>
-              <text x="48" y="92" text-anchor="middle" font-size="10" font-weight="700" fill="#52606d">S</text>
-              <text x="8" y="51" text-anchor="end" font-size="10" font-weight="700" fill="#52606d">W</text>
-              <!-- Direction arrow pointing where wind is going TO -->
-              <g :transform="`rotate(${(Math.round(detection.window.avg_direction_deg) + 180) % 360}, 48, 48)`">
-                <!-- Arrowhead pointing to source -->
-                <polygon points="48,18 43,32 53,32" fill="#2563eb"/>
-                <!-- Shaft -->
-                <line x1="48" y1="32" x2="48" y2="52" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"/>
-                <!-- Tail (dashed, pointing away from source) -->
-                <line x1="48" y1="52" x2="48" y2="68" stroke="#93c5fd" stroke-width="2" stroke-dasharray="3,3" stroke-linecap="round"/>
-              </g>
-              <!-- Center hub -->
-              <circle cx="48" cy="48" r="3.5" fill="#1f2933"/>
-              <!-- Degree label in center area -->
-              <text x="48" y="80" text-anchor="middle" font-size="9" fill="#7b8794">{{ dirLabel(detection.window.avg_direction_deg) }} · {{ Math.round(detection.window.avg_direction_deg) }}°</text>
-            </svg>
-          </div>
+      <!-- Overview tab ───────────────────────────────────────────────── -->
+      <template v-if="activeTab === 'overview'">
+        <!-- Wind speed chart ───────────────────────────────────────────── -->
+        <div v-if="windChart" class="chart-section">
+          <h3>Wind Speed</h3>
+          <svg
+            :viewBox="`0 0 ${WIND_SVG_W} ${WIND_SVG_H}`"
+            class="chart-svg"
+            :style="`max-height:${WIND_SVG_H}px`"
+          >
+            <!-- Horizontal grid lines -->
+            <line
+              v-for="yl in windChart.yLabels"
+              :key="`wg${yl.value}`"
+              :x1="WML" :y1="yl.y"
+              :x2="WIND_SVG_W - WMR" :y2="yl.y"
+              stroke="#e4e7eb" stroke-width="1"
+            />
+            <!-- In-window highlight band -->
+            <rect
+              v-if="windChart.windowBand"
+              :x="windChart.windowBand.x" :y="WMT"
+              :width="windChart.windowBand.width" :height="WPH"
+              fill="#eff6ff"
+            />
+            <!-- Area fill under the line -->
+            <path :d="windChart.areaPath" fill="#bfdbfe" fill-opacity="0.5"/>
+            <!-- Wind speed line -->
+            <path
+              :d="windChart.linePath"
+              fill="none"
+              stroke="#2563eb"
+              stroke-width="2"
+              stroke-linejoin="round"
+              stroke-linecap="round"
+            />
+            <!-- Data point dots -->
+            <circle
+              v-for="(pt, i) in windChart.pts"
+              :key="`wpt${i}`"
+              :cx="pt.x" :cy="pt.y" r="2.5"
+              :fill="pt.inWindow ? '#2563eb' : '#93c5fd'"
+              stroke="#fff" stroke-width="1.5"
+            />
+            <!-- Y axis -->
+            <line :x1="WML" :y1="WMT" :x2="WML" :y2="WBOTTOM" stroke="#cbd2d9" stroke-width="1"/>
+            <text
+              v-for="yl in windChart.yLabels"
+              :key="`wyl${yl.value}`"
+              :x="WML - 5" :y="+yl.y + 4"
+              text-anchor="end" font-size="10" fill="#7b8794"
+            >{{ yl.value }}</text>
+            <!-- Y axis unit -->
+            <text
+              :x="10" :y="WMT + WPH / 2 + 4"
+              text-anchor="middle" font-size="10" fill="#7b8794"
+              :transform="`rotate(-90, 10, ${WMT + WPH / 2})`"
+            >km/h</text>
+            <!-- X axis -->
+            <line :x1="WML" :y1="WBOTTOM" :x2="WIND_SVG_W - WMR" :y2="WBOTTOM" stroke="#cbd2d9" stroke-width="1"/>
+            <text
+              v-for="(xl, i) in windChart.xLabels"
+              :key="`wxl${i}`"
+              :x="xl.x" :y="WBOTTOM + 14"
+              text-anchor="middle" font-size="10" fill="#7b8794"
+            >{{ xl.label }}</text>
+          </svg>
+        </div>
 
-          <!-- Hourly direction arrow strip -->
-          <div class="hourly-arrows">
-            <div
-              v-for="(h, i) in hourlyArrows"
-              :key="i"
-              class="hour-arrow"
-              :class="{ 'hour-arrow-context': !h.inWindow }"
-            >
-              <svg width="22" height="22" viewBox="0 0 22 22">
-                <g :transform="`rotate(${(h.dir + 180) % 360}, 11, 11)`">
-                  <polygon points="11,2 8,10 14,10" :fill="h.inWindow ? '#2563eb' : '#93c5fd'"/>
-                  <line x1="11" y1="10" x2="11" y2="18" :stroke="h.inWindow ? '#2563eb' : '#93c5fd'" stroke-width="1.5" stroke-linecap="round"/>
+        <!-- Wind direction ──────────────────────────────────────────────── -->
+        <div class="chart-section">
+          <h3>Wind Direction</h3>
+          <div class="direction-row">
+            <!-- Compass rose -->
+            <div class="compass-wrap">
+              <svg viewBox="0 0 96 96" width="96" height="96">
+                <!-- Background circle -->
+                <circle cx="48" cy="48" r="42" fill="#f9fafb" stroke="#e4e7eb" stroke-width="1.5"/>
+                <!-- Intercardinal tick marks -->
+                <line x1="48" y1="10" x2="48" y2="17" stroke="#e4e7eb" stroke-width="1.5"/>
+                <line x1="86" y1="48" x2="79" y2="48" stroke="#e4e7eb" stroke-width="1.5"/>
+                <line x1="48" y1="86" x2="48" y2="79" stroke="#e4e7eb" stroke-width="1.5"/>
+                <line x1="10" y1="48" x2="17" y2="48" stroke="#e4e7eb" stroke-width="1.5"/>
+                <!-- Cardinal labels -->
+                <text x="48" y="9" text-anchor="middle" font-size="10" font-weight="700" fill="#52606d">N</text>
+                <text x="88" y="51" text-anchor="start" font-size="10" font-weight="700" fill="#52606d">E</text>
+                <text x="48" y="92" text-anchor="middle" font-size="10" font-weight="700" fill="#52606d">S</text>
+                <text x="8" y="51" text-anchor="end" font-size="10" font-weight="700" fill="#52606d">W</text>
+                <!-- Direction arrow pointing where wind is going TO -->
+                <g :transform="`rotate(${(Math.round(detection.window.avg_direction_deg) + 180) % 360}, 48, 48)`">
+                  <!-- Arrowhead pointing to source -->
+                  <polygon points="48,18 43,32 53,32" fill="#2563eb"/>
+                  <!-- Shaft -->
+                  <line x1="48" y1="32" x2="48" y2="52" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"/>
+                  <!-- Tail (dashed, pointing away from source) -->
+                  <line x1="48" y1="52" x2="48" y2="68" stroke="#93c5fd" stroke-width="2" stroke-dasharray="3,3" stroke-linecap="round"/>
                 </g>
+                <!-- Center hub -->
+                <circle cx="48" cy="48" r="3.5" fill="#1f2933"/>
+                <!-- Degree label in center area -->
+                <text x="48" y="80" text-anchor="middle" font-size="9" fill="#7b8794">{{ dirLabel(detection.window.avg_direction_deg) }} · {{ Math.round(detection.window.avg_direction_deg) }}°</text>
               </svg>
-              <span class="hour-arrow-label">{{ h.time }}</span>
-              <span class="hour-arrow-speed">{{ h.speed }}</span>
+            </div>
+
+            <!-- Hourly direction arrow strip -->
+            <div class="hourly-arrows">
+              <div
+                v-for="(h, i) in hourlyArrows"
+                :key="i"
+                class="hour-arrow"
+                :class="{ 'hour-arrow-context': !h.inWindow }"
+              >
+                <svg width="22" height="22" viewBox="0 0 22 22">
+                  <g :transform="`rotate(${(h.dir + 180) % 360}, 11, 11)`">
+                    <polygon points="11,2 8,10 14,10" :fill="h.inWindow ? '#2563eb' : '#93c5fd'"/>
+                    <line x1="11" y1="10" x2="11" y2="18" :stroke="h.inWindow ? '#2563eb' : '#93c5fd'" stroke-width="1.5" stroke-linecap="round"/>
+                  </g>
+                </svg>
+                <span class="hour-arrow-label">{{ h.time }}</span>
+                <span class="hour-arrow-speed">{{ h.speed }}</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Precipitation chart ─────────────────────────────────────────── -->
-      <div v-if="precipChart" class="chart-section">
-        <h3>Precipitation</h3>
-        <svg
-          :viewBox="`0 0 ${PREC_SVG_W} ${PREC_SVG_H}`"
-          class="chart-svg"
-          :style="`max-height:${PREC_SVG_H}px`"
-        >
-          <!-- In-window band -->
-          <rect
-            v-if="precipChart.windowBand"
-            :x="precipChart.windowBand.x" :y="PMT"
-            :width="precipChart.windowBand.width" :height="PPH"
-            fill="#eff6ff"
-          />
-          <!-- Bars -->
-          <rect
-            v-for="(bar, i) in precipChart.bars"
-            :key="`pb${i}`"
-            :x="bar.x" :y="bar.y"
-            :width="bar.width" :height="bar.height"
-            :fill="bar.inWindow ? '#60a5fa' : '#bfdbfe'"
-            rx="1.5"
-          />
-          <!-- Y axis -->
-          <line :x1="PML" :y1="PMT" :x2="PML" :y2="PBOTTOM" stroke="#cbd2d9" stroke-width="1"/>
-          <text
-            v-for="yl in precipChart.yLabels"
-            :key="`pyl${yl.value}`"
-            :x="PML - 5" :y="+yl.y + 4"
-            text-anchor="end" font-size="10" fill="#7b8794"
-          >{{ yl.value }}</text>
-          <text
-            :x="10" :y="PMT + PPH / 2 + 4"
-            text-anchor="middle" font-size="10" fill="#7b8794"
-            :transform="`rotate(-90, 10, ${PMT + PPH / 2})`"
-          >mm/h</text>
-          <!-- X axis -->
-          <line :x1="PML" :y1="PBOTTOM" :x2="PREC_SVG_W - PMR" :y2="PBOTTOM" stroke="#cbd2d9" stroke-width="1"/>
-          <text
-            v-for="(xl, i) in precipChart.xLabels"
-            :key="`pxl${i}`"
-            :x="xl.x" :y="PBOTTOM + 14"
-            text-anchor="middle" font-size="10" fill="#7b8794"
-          >{{ xl.label }}</text>
-        </svg>
-      </div>
-
-      <!-- Models ──────────────────────────────────────────────────────── -->
-      <div class="chart-section">
-        <h3>Forecast models</h3>
-        <div class="models-list">
-          <span v-for="m in detection.window.models" :key="m" class="model-tag">{{ m }}</span>
+        <!-- Precipitation chart ─────────────────────────────────────────── -->
+        <div v-if="precipChart" class="chart-section">
+          <h3>Precipitation</h3>
+          <svg
+            :viewBox="`0 0 ${PREC_SVG_W} ${PREC_SVG_H}`"
+            class="chart-svg"
+            :style="`max-height:${PREC_SVG_H}px`"
+          >
+            <!-- In-window band -->
+            <rect
+              v-if="precipChart.windowBand"
+              :x="precipChart.windowBand.x" :y="PMT"
+              :width="precipChart.windowBand.width" :height="PPH"
+              fill="#eff6ff"
+            />
+            <!-- Bars -->
+            <rect
+              v-for="(bar, i) in precipChart.bars"
+              :key="`pb${i}`"
+              :x="bar.x" :y="bar.y"
+              :width="bar.width" :height="bar.height"
+              :fill="bar.inWindow ? '#60a5fa' : '#bfdbfe'"
+              rx="1.5"
+            />
+            <!-- Y axis -->
+            <line :x1="PML" :y1="PMT" :x2="PML" :y2="PBOTTOM" stroke="#cbd2d9" stroke-width="1"/>
+            <text
+              v-for="yl in precipChart.yLabels"
+              :key="`pyl${yl.value}`"
+              :x="PML - 5" :y="+yl.y + 4"
+              text-anchor="end" font-size="10" fill="#7b8794"
+            >{{ yl.value }}</text>
+            <text
+              :x="10" :y="PMT + PPH / 2 + 4"
+              text-anchor="middle" font-size="10" fill="#7b8794"
+              :transform="`rotate(-90, 10, ${PMT + PPH / 2})`"
+            >mm/h</text>
+            <!-- X axis -->
+            <line :x1="PML" :y1="PBOTTOM" :x2="PREC_SVG_W - PMR" :y2="PBOTTOM" stroke="#cbd2d9" stroke-width="1"/>
+            <text
+              v-for="(xl, i) in precipChart.xLabels"
+              :key="`pxl${i}`"
+              :x="xl.x" :y="PBOTTOM + 14"
+              text-anchor="middle" font-size="10" fill="#7b8794"
+            >{{ xl.label }}</text>
+          </svg>
         </div>
-        <div v-if="detection.window.dry_filter_applied" style="margin-top:8px; font-size:12px; color:#7b8794">
-          Dry filter applied
-        </div>
-      </div>
 
-      <!-- Plugin outputs ──────────────────────────────────────────────── -->
-      <div v-if="Object.keys(detection.window.plugin_outputs).length" class="chart-section">
-        <h3>Plugin outputs</h3>
-        <div
-          v-for="(output, plugin) in detection.window.plugin_outputs"
-          :key="plugin"
-          class="plugin-block"
-        >
-          <div class="plugin-block-name">{{ plugin }}</div>
-          <div class="plugin-kv">
-            <template v-for="(val, key) in output" :key="key">
-              <span class="plugin-key">{{ key }}</span>
-              <span class="plugin-val">{{ val }}</span>
-            </template>
+        <!-- Models ──────────────────────────────────────────────────────── -->
+        <div class="chart-section">
+          <h3>Forecast models</h3>
+          <div class="models-list">
+            <span v-for="m in detection.window.models" :key="m" class="model-tag">{{ m }}</span>
+          </div>
+          <div v-if="detection.window.dry_filter_applied" style="margin-top:8px; font-size:12px; color:#7b8794">
+            Dry filter applied
           </div>
         </div>
-      </div>
+
+        <!-- Plugin outputs ──────────────────────────────────────────────── -->
+        <div v-if="Object.keys(detection.window.plugin_outputs).length" class="chart-section">
+          <h3>Plugin outputs</h3>
+          <div
+            v-for="(output, plugin) in detection.window.plugin_outputs"
+            :key="plugin"
+            class="plugin-block"
+          >
+            <div class="plugin-block-name">{{ plugin }}</div>
+            <div class="plugin-kv">
+              <template v-for="(val, key) in output" :key="key">
+                <span class="plugin-key">{{ key }}</span>
+                <span class="plugin-val">{{ val }}</span>
+              </template>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Analysis tab ───────────────────────────────────────────────── -->
+      <template v-else-if="activeTab === 'analysis'">
+        <AnalysisTab :report="detection.window.report" />
+      </template>
     </template>
   </div>
 </template>

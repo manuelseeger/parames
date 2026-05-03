@@ -1,18 +1,26 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { api } from '../api.js';
 import { navigate } from '../router.js';
 
 const detections = ref(null);
 const error = ref(null);
+// null = live detections only, true = backtests only, 'all' = all
+const source = ref(null);
 
-onMounted(async () => {
+async function loadDetections() {
+  error.value = null;
+  detections.value = null;
   try {
-    detections.value = await api.listDetections(100);
+    const isBacktest = source.value === 'all' ? null : source.value;
+    detections.value = await api.listDetections(100, isBacktest);
   } catch (e) {
     error.value = e.message;
   }
-});
+}
+
+onMounted(loadDetections);
+watch(source, loadDetections);
 
 function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -73,6 +81,11 @@ function sparkBand(hours) {
   <div>
     <div class="toolbar">
       <h1 style="margin:0">Detections</h1>
+      <div class="segmented-control">
+        <button :class="{ active: source === null }" @click="source = null">Live</button>
+        <button :class="{ active: source === true }" @click="source = true">Backtests</button>
+        <button :class="{ active: source === 'all' }" @click="source = 'all'">All</button>
+      </div>
       <span v-if="detections" class="muted" style="font-size:13px">{{ detections.length }} total</span>
     </div>
 

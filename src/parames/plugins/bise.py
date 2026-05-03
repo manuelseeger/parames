@@ -6,9 +6,9 @@ from typing import Any, ClassVar, Literal
 from pydantic import Field
 
 from parames.common import LocationConfig
-from parames.domain import HourForecast
+from parames.domain import HourForecast, PluginReport, RuleEvaluation
 from parames.forecast import OpenMeteoForecastClient
-from parames.plugins.base import PluginConfigBase, register_plugin
+from parames.plugins.base import PluginConfigBase, PluginScoringResult, register_plugin
 
 
 class BisePluginConfig(PluginConfigBase):
@@ -36,8 +36,7 @@ class BisePlugin:
     Returns a sub-score in [0, 100] when the pressure gradient confirms a Bise
     pattern, or `None` to opt out (no positive corroboration, missing data, or
     incomplete window). Opting out means Bise is excluded from both numerator
-    and denominator of the weighted-mean composite — a windless dry day is
-    not penalised for "no Bise gradient".
+    and denominator of the weighted-mean composite.
     """
 
     type: ClassVar[str] = "bise"
@@ -71,10 +70,14 @@ class BisePlugin:
         window_times: list[datetime],
         prefetched: BisePrefetched,
         contributing_models: list[str],
-    ) -> tuple[float | None, dict[str, Any]]:
+    ) -> PluginScoringResult:
+        cfg = self.config
         gradients: list[float] = []
+        hourly: list[dict[str, Any]] = []
+        missing_timestamps: int = 0
+
         for timestamp in window_times:
-            per_model: list[float] = []
+            per_model: dict[str, float] = {}
             for model in contributing_models:
                 west = prefetched.west.get(model, {}).get(timestamp)
                 east = prefetched.east.get(model, {}).get(timestamp)
@@ -85,20 +88,97 @@ class BisePlugin:
                     or east.pressure_msl is None
                 ):
                     continue
-                per_model.append(east.pressure_msl - west.pressure_msl)
+                per_model[model] = round(east.pressure_msl - west.pressure_msl, 3)
             if per_model:
-                gradients.append(sum(per_model) / len(per_model))
+                mean_gradient = sum(per_model.values()) / len(per_model)
+                gradients.append(mean_gradient)
+                hourly.append({
+                    "time": timestamp.isoformat(),
+                    "per_model_gradient_hpa": per_model,
+                    "mean_gradient_hpa": round(mean_gradient, 3),
+                })
+            else:
+                missing_timestamps += 1
+                hourly.append({
+                    "time": timestamp.isoformat(),
+                    "per_model_gradient_hpa": {},
+                    "mean_gradient_hpa": None,
+                })
 
-        if len(gradients) != len(window_times) or not gradients:
-            return None, {}
+        data_complete = missing_timestamps == 0 and len(gradients) == len(window_times)
+
+        if not data_complete or not gradients:
+            completeness_rule = RuleEvaluation(
+                name="data_completeness",
+                observed=f"{len(gradients)}/{len(window_times)} timestamps with data",
+                threshold=len(window_times),
+                outcome="fail",
+                message="Insufficient pressure data — opting out",
+            )
+            plugin_report = PluginReport(
+                type="bise",
+                config_snapshot=cfg.model_dump(mode="json"),
+                inputs={
+                    "contributing_models": contributing_models,
+                    "west_location": cfg.pressure_reference_west.model_dump(),
+                    "east_location": cfg.pressure_reference_east.model_dump(),
+                },
+                metrics={},
+                hourly=hourly,
+                rules=[completeness_rule],
+            )
+            return PluginScoringResult(sub_score=None, output={}, report=plugin_report)
 
         gradient = sum(gradients) / len(gradients)
-        # Always emit the gradient for display, even when corroboration is absent.
         output = {"gradient_hpa": gradient}
 
         if gradient >= 3.0:
-            return 100.0, output
-        if gradient >= self.config.east_minus_west_pressure_hpa_min:
-            return 75.0, output
-        # Below threshold — gradient is real but not corroborating. Opt out.
-        return None, output
+            sub_score = 100.0
+            grad_outcome = "pass"
+            grad_message = f"Strong gradient {gradient:.2f} hPa ≥ 3.0"
+        elif gradient >= cfg.east_minus_west_pressure_hpa_min:
+            sub_score = 75.0
+            grad_outcome = "warn"
+            grad_message = f"Gradient {gradient:.2f} hPa ≥ {cfg.east_minus_west_pressure_hpa_min} hPa (threshold)"
+        else:
+            sub_score = None
+            grad_outcome = "fail"
+            grad_message = f"Gradient {gradient:.2f} hPa < {cfg.east_minus_west_pressure_hpa_min} hPa — opting out"
+
+        metrics = {
+            "avg_gradient_hpa": round(gradient, 3),
+            "min_gradient_hpa": round(min(gradients), 3),
+            "max_gradient_hpa": round(max(gradients), 3),
+        }
+
+        rules: list[RuleEvaluation] = [
+            RuleEvaluation(
+                name="data_completeness",
+                observed=f"{len(gradients)}/{len(window_times)} timestamps with data",
+                threshold=len(window_times),
+                outcome="pass",
+            ),
+            RuleEvaluation(
+                name="gradient_threshold",
+                observed=round(gradient, 3),
+                threshold=cfg.east_minus_west_pressure_hpa_min,
+                outcome=grad_outcome,
+                message=grad_message,
+            ),
+        ]
+
+        plugin_report = PluginReport(
+            type="bise",
+            summary=f"Avg gradient {gradient:.2f} hPa — {grad_outcome}",
+            config_snapshot=cfg.model_dump(mode="json"),
+            inputs={
+                "contributing_models": contributing_models,
+                "west_location": cfg.pressure_reference_west.model_dump(),
+                "east_location": cfg.pressure_reference_east.model_dump(),
+            },
+            metrics=metrics,
+            hourly=hourly,
+            rules=rules,
+        )
+
+        return PluginScoringResult(sub_score=sub_score, output=output, report=plugin_report)

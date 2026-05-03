@@ -177,8 +177,9 @@ def test_score_window_renormalizes_when_plugin_opts_out(default_config, fixed_no
         type = "bise"
         enabled = True
         def prefetch(self, **_): return None
-        def score_window(self, **_) -> tuple[float | None, dict[str, Any]]:
-            return None, {}
+        def score_window(self, **_):
+            from parames.plugins.base import PluginScoringResult
+            return PluginScoringResult(sub_score=None, output={})
 
     baseline = score_window(profile, hours)
     with_opt_out = score_window(profile, hours, plugins=[_NoneBisePlugin()])

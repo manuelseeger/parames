@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import io
+import sys
 from collections.abc import Sequence
 from typing import Protocol
 
@@ -9,6 +11,18 @@ from rich.text import Text
 
 from parames.delivery._charts import COL_W, compass, vbar
 from parames.domain import CandidateWindow, WindowHour
+
+
+def _make_console() -> Console:
+    # On Windows, sys.stdout may default to cp1252 which can't encode emojis.
+    # Wrap the underlying binary buffer with utf-8 so Rich can write any character.
+    try:
+        file = io.TextIOWrapper(
+            sys.stdout.buffer, encoding="utf-8", errors="replace", line_buffering=True
+        )
+        return Console(file=file, legacy_windows=False)
+    except AttributeError:
+        return Console(legacy_windows=False)
 
 
 def _render_horizontal_charts(console: Console, hours: list[WindowHour]) -> None:
@@ -60,7 +74,7 @@ class DeliveryChannel(Protocol):
 
 class ConsoleChannel:
     def __init__(self, console: Console | None = None) -> None:
-        self._console = console or Console()
+        self._console = console or _make_console()
 
     async def deliver(self, alert_name: str, windows: Sequence[CandidateWindow]) -> None:
         if not windows:

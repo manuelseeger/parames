@@ -92,11 +92,12 @@ def _score(
         secondary_model=secondary_model,
     )
     plugin = LaminarPlugin(cfg)
-    return plugin.score_window(
+    result = plugin.score_window(
         window_times=window_times,
         prefetched=pre,
         contributing_models=contributing_models,
     )
+    return result.sub_score, result.output
 
 
 # ---------------------------------------------------------------------------
@@ -500,14 +501,14 @@ def test_primary_model_substituted_when_not_in_contributing() -> None:
     hours = {TS: _hour(TS)}
     pre = LaminarPrefetched(data={"icon_d2": hours})
     plugin = LaminarPlugin(cfg)
-    sub, out = plugin.score_window(
+    result = plugin.score_window(
         window_times=[TS],
         prefetched=pre,
         contributing_models=["icon_d2"],  # configured primary is absent
     )
-    assert sub is not None
-    assert "primary_model_substituted" in out["reasons"]
-    assert out["primary_model"] == "icon_d2"
+    assert result.sub_score is not None
+    assert "primary_model_substituted" in result.output["reasons"]
+    assert result.output["primary_model"] == "icon_d2"
 
 
 # ---------------------------------------------------------------------------

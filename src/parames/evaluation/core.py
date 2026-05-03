@@ -5,9 +5,9 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from parames.config import AlertProfileConfig, ScoringConfig
-from parames.domain import CandidateWindow, HourForecast
+from parames.domain import CandidateWindow, HourEvaluation, HourForecast, ModelForecastSeries, ModelHourForecast
 from parames.evaluation.scoring import build_candidate_windows
-from parames.evaluation.wind import evaluate_hour_candidate, models_agree
+from parames.evaluation.wind import evaluate_hour_reasons, models_agree
 from parames.evaluation.windows import EvaluatedHour, attach_context_hours
 from parames.evaluation.direction import vector_average_direction
 from parames.forecast import ForecastClient, OpenMeteoForecastClient, ZURICH_TIMEZONE
@@ -78,17 +78,48 @@ def _evaluate_with_client(
     timestamps = sorted(
         {timestamp for forecasts in model_forecasts.values() for timestamp in forecasts}
     )
+
+    all_hour_evaluations: list[HourEvaluation] = []
     accepted_hours: list[EvaluatedHour] = []
+
     for timestamp in timestamps:
         if timestamp < current_time or timestamp > horizon_end:
+            all_hour_evaluations.append(HourEvaluation(
+                time=timestamp,
+                accepted=False,
+                matching_models=[],
+                rejection_reasons=["out_of_horizon"],
+            ))
             continue
-        evaluated = _evaluate_timestamp(
+        evaluated, hour_eval = _evaluate_timestamp(
             timestamp=timestamp,
             profile=profile,
             model_forecasts=model_forecasts,
         )
+        all_hour_evaluations.append(hour_eval)
         if evaluated is not None:
             accepted_hours.append(evaluated)
+
+    # Snapshot raw forecasts (full prefetch horizon, all models)
+    raw_forecasts: list[ModelForecastSeries] = [
+        ModelForecastSeries(
+            model=model,
+            hours=[
+                ModelHourForecast(
+                    time=ts,
+                    wind_speed=_r(h.wind_speed, 2),
+                    wind_direction=_r(h.wind_direction, 1),
+                    wind_gusts=_r(h.wind_gusts, 2),
+                    precipitation=_r(h.precipitation, 3),
+                    pressure_msl=_r(h.pressure_msl, 2),
+                    cape=_r(h.cape, 1),
+                    showers=_r(h.showers, 3),
+                )
+                for ts, h in sorted(by_time.items())
+            ],
+        )
+        for model, by_time in model_forecasts.items()
+    ]
 
     windows = build_candidate_windows(
         profile,
@@ -96,6 +127,8 @@ def _evaluate_with_client(
         plugins=plugins,
         plugin_data=plugin_data,
         scoring=scoring,
+        hour_evaluations=all_hour_evaluations,
+        raw_forecasts=raw_forecasts,
     )
     scored = [
         window
@@ -106,28 +139,48 @@ def _evaluate_with_client(
     return scored
 
 
+def _r(value: float | None, dp: int) -> float | None:
+    """Round a float to dp decimal places, or return None."""
+    return round(value, dp) if value is not None else None
+
+
 def _evaluate_timestamp(
     *,
     timestamp: datetime,
     profile: AlertProfileConfig,
     model_forecasts: dict[str, dict[datetime, HourForecast]],
-) -> EvaluatedHour | None:
+) -> tuple[EvaluatedHour | None, HourEvaluation]:
     matching: dict[str, HourForecast] = {}
+
     for model, forecast_by_time in model_forecasts.items():
         hour = forecast_by_time.get(timestamp)
         if hour is None:
             continue
-        if evaluate_hour_candidate(
+        passed, _ = evaluate_hour_reasons(
             hour, wind=profile.wind, time_window=profile.time_window, dry=profile.dry
-        ):
+        )
+        if passed:
             matching[model] = hour
 
     agreement = profile.model_agreement
     assert agreement is not None
+    matching_model_list = sorted(matching.keys())
+
     if len(matching) < agreement.min_models_matching:
-        return None
+        return None, HourEvaluation(
+            time=timestamp,
+            accepted=False,
+            matching_models=matching_model_list,
+            rejection_reasons=["min_models_matching_not_met"],
+        )
+
     if agreement.required and not models_agree(list(matching.values()), agreement):
-        return None
+        return None, HourEvaluation(
+            time=timestamp,
+            accepted=False,
+            matching_models=matching_model_list,
+            rejection_reasons=["model_agreement_failed"],
+        )
 
     directions = [
         hour.wind_direction
@@ -143,8 +196,14 @@ def _evaluate_timestamp(
         if hour.precipitation is not None
     ]
     if not directions or not speeds:
-        return None
-    return EvaluatedHour(
+        return None, HourEvaluation(
+            time=timestamp,
+            accepted=False,
+            matching_models=matching_model_list,
+            rejection_reasons=["missing_wind_data"],
+        )
+
+    evaluated = EvaluatedHour(
         time=timestamp,
         avg_wind_speed_kmh=sum(speeds) / len(speeds),
         max_wind_speed_kmh=max(speeds),
@@ -153,4 +212,11 @@ def _evaluate_timestamp(
         avg_precipitation_mm_per_hour=(sum(precipitations) / len(precipitations))
         if precipitations
         else None,
+    )
+
+    return evaluated, HourEvaluation(
+        time=timestamp,
+        accepted=True,
+        matching_models=matching_model_list,
+        rejection_reasons=[],
     )
