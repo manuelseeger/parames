@@ -14,10 +14,6 @@ from parames.domain import HourForecast
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 ZURICH_TIMEZONE = "Europe/Zurich"
-LEGACY_MODEL_ALIASES = {
-    "icon_ch1": "meteoswiss_icon_ch1",
-    "icon_ch2": "meteoswiss_icon_ch2",
-}
 
 
 class ForecastClient(Protocol):
@@ -77,14 +73,13 @@ class OpenMeteoForecastClient:
         forecast_days: int = 3,
         timezone: str = ZURICH_TIMEZONE,
     ) -> dict[datetime, HourForecast]:
-        resolved_model = LEGACY_MODEL_ALIASES.get(model, model)
         response = self._client.get(
             "",
             params={
                 "latitude": location.latitude,
                 "longitude": location.longitude,
                 "hourly": ",".join(hourly_variables),
-                "models": resolved_model,
+                "models": model,
                 "forecast_days": forecast_days,
                 "timezone": timezone,
                 "wind_speed_unit": "kmh",

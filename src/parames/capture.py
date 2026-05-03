@@ -13,7 +13,6 @@ from parames.config import load_app_config
 from parames.domain import HourForecast
 from parames.evaluation import evaluate
 from parames.forecast import (
-    LEGACY_MODEL_ALIASES,
     OpenMeteoForecastClient,
     ZURICH_TIMEZONE,
     _create_default_ssl_context,
@@ -99,7 +98,7 @@ def _fetch_live_payloads(requests: list[dict[str, object]]) -> dict[str, dict]:
                     "latitude": location["latitude"],
                     "longitude": location["longitude"],
                     "hourly": ",".join(request["hourly_variables"]),
-                    "models": LEGACY_MODEL_ALIASES.get(model, model),
+                    "models": model,
                     "forecast_days": 3,
                     "timezone": ZURICH_TIMEZONE,
                     "wind_speed_unit": "kmh",
@@ -132,7 +131,7 @@ def _fetch_historical_payloads(
                     "latitude": location["latitude"],
                     "longitude": location["longitude"],
                     "hourly": ",".join(request["hourly_variables"]),
-                    "models": LEGACY_MODEL_ALIASES.get(model, model),
+                    "models": model,
                     "start_date": target_date.isoformat(),
                     "end_date": end_date.isoformat(),
                     "timezone": ZURICH_TIMEZONE,
