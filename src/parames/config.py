@@ -47,6 +47,8 @@ class ModelAgreementConfig(MainBaseModel):
 class WindDefaultsConfig(BaseModel):
     min_speed_kmh: float = Field(default=10.0, ge=0)
     strong_speed_kmh: float = Field(default=28.0, ge=0)
+    sweet_spot_kmh: float = Field(default=20.0, ge=0)
+    sweet_spot_sigma_kmh: float = Field(default=7.0, gt=0)
 
 
 class DefaultsConfig(BaseModel):
@@ -59,6 +61,8 @@ class DefaultsConfig(BaseModel):
 class WindConfig(MainBaseModel):
     min_speed_kmh: float | None = Field(default=None, ge=0)
     strong_speed_kmh: float | None = Field(default=None, ge=0)
+    sweet_spot_kmh: float | None = Field(default=None, ge=0)
+    sweet_spot_sigma_kmh: float | None = Field(default=None, gt=0)
     direction_min_deg: float = Field(ge=0, lt=360)
     direction_max_deg: float = Field(ge=0, le=360)
     min_consecutive_hours: int = Field(default=2, ge=1)
@@ -205,6 +209,8 @@ def resolve_profile_defaults(
     resolved_wind = profile.wind.model_copy(update={
         "min_speed_kmh": profile.wind.min_speed_kmh if profile.wind.min_speed_kmh is not None else defaults.wind.min_speed_kmh,
         "strong_speed_kmh": profile.wind.strong_speed_kmh if profile.wind.strong_speed_kmh is not None else defaults.wind.strong_speed_kmh,
+        "sweet_spot_kmh": profile.wind.sweet_spot_kmh if profile.wind.sweet_spot_kmh is not None else defaults.wind.sweet_spot_kmh,
+        "sweet_spot_sigma_kmh": profile.wind.sweet_spot_sigma_kmh if profile.wind.sweet_spot_sigma_kmh is not None else defaults.wind.sweet_spot_sigma_kmh,
     })
     return profile.model_copy(
         update={

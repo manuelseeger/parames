@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from itertools import combinations
 
 from parames.config import DryConfig, TimeWindowConfig, WindConfig
@@ -58,16 +59,14 @@ def models_agree(hours: list[HourForecast], agreement: ModelAgreementConfig) -> 
     return True
 
 
-def subscore_wind_speed(avg_speed_kmh: float, wind: WindConfig) -> float:
-    """Tent: 0 at min and strong, peaks 100 at midpoint."""
-    lo = wind.min_speed_kmh
-    hi = wind.strong_speed_kmh
-    if lo is None or hi is None or avg_speed_kmh <= lo or avg_speed_kmh >= hi:
+def subscore_wind_speed(hourly_speeds: list[float], wind: WindConfig) -> float:
+    """Gaussian bell centered at sweet_spot_kmh, scored per hour then averaged."""
+    mu = wind.sweet_spot_kmh
+    sigma = wind.sweet_spot_sigma_kmh
+    if not hourly_speeds or mu is None or sigma is None:
         return 0.0
-    peak = (lo + hi) / 2.0
-    if avg_speed_kmh <= peak:
-        return (avg_speed_kmh - lo) / (peak - lo) * 100.0
-    return (hi - avg_speed_kmh) / (hi - peak) * 100.0
+    scores = [math.exp(-0.5 * ((s - mu) / sigma) ** 2) * 100.0 for s in hourly_speeds]
+    return sum(scores) / len(scores)
 
 
 def subscore_wind_duration(duration_hours: int, wind: WindConfig) -> float:

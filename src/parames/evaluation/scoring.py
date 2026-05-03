@@ -129,7 +129,7 @@ def score_window(
     contributing_models = sorted({model for hour in hours for model in hour.models})
 
     subscores: dict[str, float | None] = {
-        "wind_speed": subscore_wind_speed(avg_speed, profile.wind),
+        "wind_speed": subscore_wind_speed([h.avg_wind_speed_kmh for h in hours], profile.wind),
         "wind_duration": subscore_wind_duration(len(hours), profile.wind),
     }
 

@@ -9,6 +9,8 @@ defaults:
   wind:
     min_speed_kmh: 10.0
     strong_speed_kmh: 28.0
+    sweet_spot_kmh: 20.0
+    sweet_spot_sigma_kmh: 7.0
 
 scoring:
   weights:
