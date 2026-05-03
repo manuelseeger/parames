@@ -26,7 +26,7 @@ scoring:
 
 alerts:
   - name: schoenberg
-    description: "NE/E wind for ground handling - Schoenberg"
+    description: "N wind for ground handling - Schoenberg"
     location:
       name: schoenberg
       latitude: 47.964790
@@ -51,7 +51,7 @@ alerts:
     delivery:
       - console
   - name: mainz_finthen
-    description: "NE/E wind for ground handling - Mainz Finthen"
+    description: "Wind for ground handling - Mainz Finthen"
     location:
       name: mainz_finthen
       latitude: 49.984

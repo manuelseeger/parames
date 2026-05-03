@@ -16,8 +16,15 @@ def _make_window(
     classification: str = "candidate",
     avg_precipitation_mm_per_hour: float | None = 0.4,
     bise_gradient_hpa: float | None = 2.0,
+    bise_enabled: bool = True,
     hours: list[WindowHour] | None = None,
 ) -> CandidateWindow:
+    subscores: dict = {}
+    plugin_outputs: dict = {}
+    if bise_enabled:
+        subscores["bise"] = 75.0 if bise_gradient_hpa is not None else None
+        if bise_gradient_hpa is not None:
+            plugin_outputs["bise"] = {"gradient_hpa": bise_gradient_hpa}
     return CandidateWindow(
         alert_name="zurich_bise",
         start=datetime(2026, 4, 29, 11, 0),
@@ -32,8 +39,9 @@ def _make_window(
         dry_filter_applied=False,
         score=score,
         classification=classification,
+        subscores=subscores,
         hours=hours or [],
-        plugin_outputs={"bise": {"gradient_hpa": bise_gradient_hpa}} if bise_gradient_hpa is not None else {},
+        plugin_outputs=plugin_outputs,
     )
 
 
