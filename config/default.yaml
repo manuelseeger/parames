@@ -15,10 +15,9 @@ defaults:
 scoring:
   weights:
     wind_speed: 2.0
-    wind_duration: 0.5
     plugins:
-      bise: 0.5
-      laminar: 1.0
+      bise: 0.7
+      laminar: 0.7
   emit_threshold: 50
   tiers:
     candidate_min: 60

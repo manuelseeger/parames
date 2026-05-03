@@ -35,7 +35,6 @@ def test_scoring_trace_contributions_included(default_config) -> None:
     assert window.report is not None
     trace = window.report.scoring
     assert "wind_speed" in trace.contributions
-    assert "wind_duration" in trace.contributions
 
     for name, c in trace.contributions.items():
         assert "weight" in c
@@ -46,14 +45,14 @@ def test_scoring_trace_contributions_included(default_config) -> None:
 
 def test_scoring_trace_weight_total_and_raw_score(default_config) -> None:
     profile = default_config.alerts[0].model_copy(update={"dry": None, "plugins": []})
-    hours = _hours(4, 19.0)  # speed=100, dur=100
+    hours = _hours(4, 20.0)  # speed at sweet spot → ~100
     window = score_window(profile, hours)
 
     assert window.report is not None
     trace = window.report.scoring
 
     assert trace.weight_total == pytest.approx(
-        trace.weights["wind_speed"] + trace.weights["wind_duration"], abs=1e-4
+        sum(trace.weights.values()), abs=1e-4
     )
     assert trace.weighted_sum == pytest.approx(
         sum(

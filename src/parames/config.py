@@ -97,7 +97,6 @@ class SchedulerConfig(BaseModel):
 
 class ScoringWeightsConfig(MainBaseModel):
     wind_speed: float = Field(default=1.0, ge=0)
-    wind_duration: float = Field(default=1.0, ge=0)
     plugins: dict[str, float] = Field(default_factory=lambda: {"bise": 0.5})
 
 

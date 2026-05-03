@@ -69,14 +69,3 @@ def subscore_wind_speed(hourly_speeds: list[float], wind: WindConfig) -> float:
     return sum(scores) / len(scores)
 
 
-def subscore_wind_duration(duration_hours: int, wind: WindConfig) -> float:
-    """0 below min_consecutive, 50 at min_consecutive, linear to 100 at 4h+."""
-    if duration_hours < wind.min_consecutive_hours:
-        return 0.0
-    if duration_hours >= 4:
-        return 100.0
-    if wind.min_consecutive_hours >= 4:
-        return 100.0
-    span = 4 - wind.min_consecutive_hours
-    extra = duration_hours - wind.min_consecutive_hours
-    return 50.0 + (extra / span) * 50.0

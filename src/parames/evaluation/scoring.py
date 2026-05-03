@@ -15,7 +15,7 @@ from parames.domain import (
     WindowHour,
 )
 from parames.evaluation.direction import vector_average_direction
-from parames.evaluation.wind import subscore_wind_speed, subscore_wind_duration
+from parames.evaluation.wind import subscore_wind_speed
 from parames.evaluation.windows import EvaluatedHour
 from parames.plugins import EvaluationPlugin
 from parames.plugins.base import PluginScoringResult
@@ -44,7 +44,6 @@ def _build_weight_map(
 ) -> dict[str, float]:
     weights: dict[str, float] = {
         "wind_speed": scoring.weights.wind_speed,
-        "wind_duration": scoring.weights.wind_duration,
     }
     plugin_weights = scoring.weights.plugins
     for plugin in plugins:
@@ -130,7 +129,6 @@ def score_window(
 
     subscores: dict[str, float | None] = {
         "wind_speed": subscore_wind_speed([h.avg_wind_speed_kmh for h in hours], profile.wind),
-        "wind_duration": subscore_wind_duration(len(hours), profile.wind),
     }
 
     plugin_outputs: dict[str, dict[str, Any]] = {}
