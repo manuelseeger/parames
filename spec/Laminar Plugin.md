@@ -1,120 +1,38 @@
-# Laminar Wind Scoring Plugin — Technical Spec
+# Laminar Plugin
 
 ## Purpose
 
-Add a laminar-quality score to candidate wind windows produced by the existing
-alert pipeline.
+The Laminar plugin is a quality signal for already-accepted candidate windows.
+It does not decide whether wind direction or wind speed is suitable. Instead it
+scores how smooth, stable, dry-looking, and model-consistent the accepted
+window appears.
 
-The plugin does **not** decide whether wind direction/speed is suitable —
-that is the alert profile's job ([evaluation.py:49](../src/parames/evaluation.py#L49)).
-It scores whether an already-accepted window is likely to be:
+It returns a raw `sub_score` in `[0, 100]` when the primary model has complete
+required wind data for the full window. Lower scores drag the weighted
+composite down proportionally. It only opts out with `sub_score = None` when
+required wind data is missing.
 
-- stable
-- smooth
-- non-gusty
-- non-convective
-- model-consistent
+## Integration
 
-The rich result (0–100 score, label, reasons, metrics) is stored in
-`CandidateWindow.plugin_outputs["laminar"]`. The 0–100 sub-score is also
-returned as the plugin's contribution to the composite window score, which
-is computed as a weighted mean of all active signals.
+Laminar is a registered evaluation plugin with:
 
----
+- plugin type: `laminar`
+- config model: `LaminarPluginConfig`
+- prefetched cache type: `LaminarPrefetched`
+- result type: `PluginScoringResult`
 
-## 1. Integration with the existing plugin system
+The config is part of the discriminated `PluginConfig` union and is re-exported
+from `parames.plugins`.
 
-The plugin implements the `EvaluationPlugin` protocol
-([plugins/base.py:20](../src/parames/plugins/base.py#L20)) and follows the
-same shape as `BisePlugin` ([plugins/bise.py](../src/parames/plugins/bise.py)).
-
-### Lifecycle (per evaluation run)
-
-1. **Construction** — instantiated by `build_plugins()` from a
-   `LaminarPluginConfig` parsed out of the alert profile's `plugins:` list.
-2. **`prefetch(client, models)`** — fetches gusts / CAPE / showers / pressure
-   for the alert location, for every model in the alert profile, over the
-   full forecast horizon. Returns a `LaminarPrefetched` cache.
-3. **`score_window(window_times, prefetched, contributing_models)`** — called
-   once per surviving `CandidateWindow`. Returns
-   `(sub_score: float | None, output: dict)`.
-
-### Score interaction with the weighted-mean aggregator
-
-Laminar is a **quality signal**. It always returns its 0–100 sub-score when
-the required wind/gust data is present — even a poor window (score 10)
-drags the composite down proportionally rather than opting out. The only
-case where it returns `None` is when `wind_speed`, `wind_direction`, or
-`wind_gusts` is missing for any hour in the primary model (see §8).
-
-The composite score in
-[`evaluation.py`](../src/parames/evaluation.py) is computed as:
-
-```
-composite = round( Σ(wᵢ · sᵢ) / Σ(wᵢ) )   over i where sᵢ is not None
-```
-
-Laminar's weight is read from global config at
-`scoring.weights.plugins.laminar` (default **1.0**). The weight lives in
-`config/default.yaml`, not on the plugin or the alert profile.
-
-| Laminar present? | Effect |
-|---|---|
-| Sub-score returned (0–100) | Contributes to weighted mean at weight 1.0 |
-| `None` (missing required data) | Excluded from numerator and denominator; remaining signals renormalize |
-
-A "poor" laminar window (e.g. sub-score 20) lowers the composite in
-proportion to its weight. A borderline candidate with good wind but poor
-laminar will have its score pulled toward the threshold and may fall below
-`scoring.emit_threshold` (40) — this is the intended suppression mechanism,
-without any special-case runner logic.
-
-### Output dict (persisted to `CandidateWindow.plugin_outputs["laminar"]`)
-
-```json
-{
-  "score": 82,
-  "label": "good",
-  "reasons": [
-    "low_gust_factor",
-    "stable_direction",
-    "low_cape",
-    "model_agreement_good"
-  ],
-  "metrics": {
-    "avg_gust_factor": 1.31,
-    "max_gust_spread_kmh": 6.2,
-    "direction_variability_deg": 18,
-    "speed_range_kmh": 4.1,
-    "max_cape": 35,
-    "model_direction_delta_deg": 22,
-    "model_speed_delta_kmh": 4.8,
-    "pressure_tendency_3h_hpa": 0.7
-  },
-  "primary_model": "icon_d2",
-  "secondary_model": "ecmwf_ifs"
-}
-```
-
-When required wind data is missing the plugin returns
-`(None, {"score": null, "label": "unavailable", "reasons": ["missing_required_wind_data"]})`.
-The `None` sub-score causes the aggregator to exclude laminar entirely from
-the composite calculation for that window.
-
----
-
-## 2. Configuration
+## Configuration
 
 ```yaml
 plugins:
   - type: laminar
     enabled: true
-
-    # Model selection for primary / secondary signals.
-    # Resolved at score time against contributing_models for the window.
-    # If null, defaults to contributing_models[0] / contributing_models[1].
-    primary_model: icon_d2          # optional
-    secondary_model: ecmwf_ifs      # optional
+    primary_model: null
+    secondary_model: null
+    wind_level_m: 10
 
     gust_factor:
       good_max: 1.35
@@ -125,22 +43,22 @@ plugins:
       marginal_max: 10.0
 
     direction_variability_deg:
-      good_max: 20
-      marginal_max: 40
+      good_max: 20.0
+      marginal_max: 40.0
 
     speed_range_kmh:
       good_max: 4.0
       marginal_max: 7.0
 
     cape_j_kg:
-      good_max: 50
-      marginal_max: 200
+      good_max: 50.0
+      marginal_max: 200.0
 
     model_agreement:
-      direction_good_max_deg: 25
-      direction_marginal_max_deg: 40
-      speed_good_max_kmh: 5
-      speed_marginal_max_kmh: 8
+      direction_good_max_deg: 25.0
+      direction_marginal_max_deg: 40.0
+      speed_good_max_kmh: 5.0
+      speed_marginal_max_kmh: 8.0
 
     pressure_tendency_3h_hpa:
       good_max_abs: 1.5
@@ -151,365 +69,372 @@ plugins:
       max_showers_mm_h: 0.0
 ```
 
-### Pydantic model (sketch)
+### Notes
+
+- `wind_level_m` is part of the plugin config. It must match the alert profile's wind level for gust variables to line up with the main wind forecast.
+- `primary_model` is used only if it is present in `contributing_models`.
+- `secondary_model` is used if it exists in the prefetched cache. Otherwise the plugin falls back to the first contributing secondary model present in the cache.
+
+## Prefetch
+
+Laminar prefetches the full alert-location horizon for every model in the alert
+profile using:
+
+- `wind_speed_{wind_level_m}m`
+- `wind_direction_{wind_level_m}m`
+- `wind_gusts_{wind_level_m}m`
+- `precipitation`
+- `showers`
+- `cape`
+- `pressure_msl`
+
+The cache is stored as:
 
 ```python
-# src/parames/plugins/laminar.py
-
-class GustFactorThresholds(MainBaseModel):
-    good_max: float = 1.35
-    marginal_max: float = 1.60
-
-# ... one per metric ...
-
-class LaminarPluginConfig(PluginConfigBase):
-    type: Literal["laminar"] = "laminar"
-    primary_model: str | None = None
-    secondary_model: str | None = None
-    gust_factor: GustFactorThresholds = Field(default_factory=GustFactorThresholds)
-    gust_spread_kmh: GustSpreadThresholds = Field(default_factory=GustSpreadThresholds)
-    direction_variability_deg: DirectionVariabilityThresholds = ...
-    speed_range_kmh: SpeedRangeThresholds = ...
-    cape_j_kg: CapeThresholds = ...
-    model_agreement: LaminarModelAgreement = ...
-    pressure_tendency_3h_hpa: PressureTendencyThresholds = ...
-    precipitation: PrecipThresholds = ...
+class LaminarPrefetched:
+    data: dict[str, dict[datetime, HourForecast]]
 ```
 
-The config must be added to the discriminated union in
-[plugins/schemas.py](../src/parames/plugins/schemas.py):
+Laminar re-fetches wind, precipitation, and pressure for its own cache instead
+of reusing the core forecast snapshot.
 
-```python
-PluginConfig = Annotated[
-    Union[BisePluginConfig, LaminarPluginConfig],
-    Field(discriminator="type"),
-]
+## Model Resolution
+
+### Primary Model
+
+Primary model selection is resolved at score time:
+
+1. Use `config.primary_model` if it is in `contributing_models`.
+2. If `config.primary_model` is set but absent from `contributing_models`, use `contributing_models[0]` and add the reason `primary_model_substituted`.
+3. Otherwise use `contributing_models[0]`.
+
+### Secondary Model
+
+Secondary model selection is resolved at score time:
+
+1. Use `config.secondary_model` if it exists in the prefetched cache.
+2. Otherwise scan `contributing_models[1:]` and pick the first model present in the prefetched cache.
+3. If none is found, treat the secondary model as unavailable.
+
+Both selections are also recorded in the plugin report rules as informational
+entries.
+
+## Required Data Gate
+
+Laminar requires the primary model to have, for every timestamp in the window:
+
+- `wind_speed`
+- `wind_direction`
+- `wind_gusts`
+
+If any of those fields are missing for any window hour, Laminar returns:
+
+```json
+{
+  "sub_score": null,
+  "output": {
+    "score": null,
+    "label": "unavailable",
+    "reasons": ["missing_required_wind_data"]
+  }
+}
 ```
 
-…and re-exported from [plugins/__init__.py](../src/parames/plugins/__init__.py).
+In that case the plugin also emits a report with a failing `data_gate` rule.
 
----
+## Metrics and Scoring
 
-## 3. Data fetched by the plugin
+Laminar starts from `100.0` and subtracts penalties. The final raw score is
+clamped to `[0.0, 100.0]`. The compact output rounds the score to an integer,
+but the returned `sub_score` remains a float.
 
-The core pipeline only fetches `wind_speed`, `wind_direction`,
-`precipitation`, `pressure_msl` ([forecast.py:107-112](../src/parames/forecast.py#L107-L112)).
-The laminar plugin's `prefetch` issues additional requests for the
-**alert location**, for **every model in the alert profile**, over the full
-forecast horizon (`forecast_days=3` to match the core fetch):
-
-| Variable | Required? | Notes |
-|---|---|---|
-| `wind_gusts_{level}m` | required | Open-Meteo exposes gust at the same wind level. |
-| `cape` | optional | Not all models expose CAPE (e.g. `meteoswiss_icon_ch2` may omit). Treat as missing → skip CAPE penalty + add `cape_unavailable` reason. |
-| `showers` | optional | Some models only return `precipitation`. Treat absence as `0`; emit `showers_unavailable` reason only if neither `showers` nor `precipitation` exist for that model. |
-| `wind_speed_{level}m`, `wind_direction_{level}m`, `precipitation`, `pressure_msl` | re-fetched | Already fetched by core; re-fetched here to keep the plugin self-contained. Known minor inefficiency — see §8. |
-
-
-### `LaminarPrefetched` shape
-
-```python
-class LaminarHour(MainBaseModel):
-    time: datetime
-    wind_speed: float | None
-    wind_direction: float | None
-    wind_gusts: float | None
-    precipitation: float | None
-    showers: float | None
-    cape: float | None
-    pressure_msl: float | None
-
-# keyed by model → time → LaminarHour
-LaminarPrefetched = dict[str, dict[datetime, LaminarHour]]
-```
-
-Pressure data covers the full horizon so `score_window` can compute
-`pressure_msl[t+3h] - pressure_msl[t]` even at the window's tail.
-
----
-
-## 4. Metric definitions
-
-All metrics computed from the **primary model** unless stated.
-
-### 4.1 Gust factor
+### Gust Factor
 
 Per hour:
-```
-gust_factor = wind_gusts / max(wind_speed, 1)
+
+```text
+gust_factor = wind_gusts / max(wind_speed, 1.0)
 gust_spread_kmh = wind_gusts - wind_speed
 ```
 
-Window:
+Window metrics:
+
+- `avg_gust_factor`
+- `max_gust_factor`
+- `avg_gust_spread_kmh`
+- `max_gust_spread_kmh`
+
+Penalties:
+
+| Metric | Tier | Penalty | Reason |
+|---|---|---|---|
+| `max_gust_factor <= good_max` | good | `0` | `low_gust_factor` |
+| `good_max < max_gust_factor <= marginal_max` | warn | `10` | `high_gust_factor` |
+| `max_gust_factor > marginal_max` | fail | `35` | `very_gusty` |
+| `max_gust_spread_kmh <= good_max` | good | `0` | none |
+| `good_max < max_gust_spread_kmh <= marginal_max` | warn | `7` | none |
+| `max_gust_spread_kmh > marginal_max` | fail | `25` | none |
+
+Only gust factor contributes a user-facing reason. Gust spread is recorded in
+the report and metrics but does not add a reason string.
+
+### Direction Stability
+
+Laminar uses vector-average direction and circular angular distance:
+
+```text
+mean_dir = vector_average_direction(window_directions)
+direction_variability_deg = max(angular_distance(direction, mean_dir))
 ```
-avg_gust_factor, max_gust_factor
-avg_gust_spread_kmh, max_gust_spread_kmh
-```
 
-### 4.2 Direction stability
+Penalties:
 
-Use circular math (already in [evaluation.py](../src/parames/evaluation.py#L35)
-— reuse `angular_distance` and `vector_average_direction`).
+| Tier | Condition | Penalty | Reason |
+|---|---|---|---|
+| good | `<= 20` | `0` | `stable_direction` |
+| warn | `> 20` and `<= 40` | `7` | `shifting_direction` |
+| fail | `> 40` | `25` | `very_shifty` |
 
-```
-mean_dir = vector_average_direction([h.wind_direction for h in window])
-direction_variability_deg = max(angular_distance(h.wind_direction, mean_dir)
-                                for h in window)
-```
+### Speed Stability
 
-This replaces the spec's pairwise O(N²) approach: linear cost, more stable
-near 360°/0° wraps, and reuses existing helpers.
+Window metrics:
 
-### 4.3 Speed stability
-
-```
+```text
 speed_range_kmh = max(wind_speed) - min(wind_speed)
-gust_range_kmh  = max(wind_gusts) - min(wind_gusts)
+gust_range_kmh = max(wind_gusts) - min(wind_gusts)
 ```
 
-### 4.4 Convective risk
+`gust_range_kmh` is computed internally but is not surfaced in the compact
+metrics output.
 
+Penalties:
+
+| Tier | Condition | Penalty | Reason |
+|---|---|---|---|
+| good | `<= 4` | `0` | `low_speed_range` |
+| warn | `> 4` and `<= 7` | `5` | `high_speed_range` |
+| fail | `> 7` | `20` | `high_speed_range` |
+
+### CAPE
+
+CAPE is treated as available only when more than half of the window hours have
+`cape` values.
+
+If CAPE is unavailable:
+
+- no CAPE penalty is applied
+- Laminar adds the reason `cape_unavailable`
+- the report includes an informational `cape_availability` rule
+
+If CAPE is available, penalties are based on `max_cape`:
+
+| Tier | Condition | Penalty | Reason |
+|---|---|---|---|
+| good | `<= 50` | `0` | `low_cape` |
+| warn | `> 50` and `<= 200` | `7` | `moderate_cape` |
+| fail | `> 200` | `25` | `high_cape` |
+
+### Precipitation and Showers
+
+Window metrics:
+
+```text
+max_precipitation = max(h.precipitation or 0.0)
+max_showers = max(h.showers or 0.0)
 ```
-max_cape, avg_cape   # primary model
-```
 
-If `cape` is missing for >50% of window hours → treat as missing → skip
-penalty, add `cape_unavailable` reason.
+Penalties are applied independently:
 
-### 4.5 Precipitation / shower risk
+| Metric | Condition | Penalty | Reason |
+|---|---|---|---|
+| precipitation | `max_precipitation > max_precip_mm_h` | `15` | `precipitation_risk` |
+| showers | `max_showers > max_showers_mm_h` | `15` | `showers_risk` |
 
-```
-max_precipitation = max over window (primary model)
-max_showers       = max over window (primary model, 0 if missing)
-```
+Missing showers are treated as `0.0`. There is no `showers_unavailable`
+reason in the current implementation.
 
-If `max_precipitation > 0` or `max_showers > 0` → strong penalty.
+### Pressure Tendency
 
-### 4.6 Model agreement (primary vs secondary)
+Laminar tries to measure a 3-hour pressure tendency from the primary model.
 
-Per timestamp in window:
-```
-speed_delta     = abs(p.wind_speed - s.wind_speed)
-direction_delta = angular_distance(p.wind_direction, s.wind_direction)
-gust_delta      = abs(p.wind_gusts - s.wind_gusts)
-```
+Primary calculation:
 
-Score against the 75th percentile (or `max` if window <4h) of each delta —
-catches a single hour of disagreement without being dominated by it.
-
-If secondary model is unavailable (not in `contributing_models` and not in
-prefetched cache), apply a flat **penalty 10** and add reason
-`secondary_model_unavailable`.
-
-### 4.7 Pressure stability
-
-```
+```text
 pressure_tendency_3h_hpa = pressure_msl[window_start + 3h] - pressure_msl[window_start]
 ```
 
-If the window starts within 3h of the forecast horizon end, fall back to:
-```
-pressure_tendency_3h_hpa = (last_pressure - first_pressure) * (3h / window_duration_h)
-```
+Fallback calculation when the exact `t+3h` value is unavailable:
 
-`max_abs_pressure_tendency_3h_hpa` is the metric used for scoring. This is a
-stability signal, not a wind-direction signal.
-
----
-
-## 5. Penalties
-
-Start `score = 100`, subtract:
-
-| Metric | Threshold | Penalty |
-|---|---|---|
-| max_gust_factor | ≤ 1.35 / ≤ 1.60 / > 1.60 | 0 / 15 / 35 |
-| max_gust_spread | ≤ 6 / ≤ 10 / > 10 km/h | 0 / 10 / 25 |
-| direction_variability | ≤ 20° / ≤ 40° / > 40° | 0 / 10 / 25 |
-| speed_range | ≤ 4 / ≤ 7 / > 7 km/h | 0 / 8 / 20 |
-| max_cape | ≤ 50 / ≤ 200 / > 200 J/kg | 0 / 10 / 25 |
-| precipitation or showers > 0 | — | 30 |
-| model dir+speed deltas | (≤25° & ≤5km/h) / (≤40° & ≤8km/h) / else | 0 / 10 / 25 |
-| secondary_model_unavailable | — | 10 |
-| abs(pressure_tendency_3h) | ≤ 1.5 / ≤ 2.5 / > 2.5 hPa | 0 / 5 / 15 |
-
-After penalties: `score = max(0, min(100, score))`.
-
----
-
-## 6. Labels
-
-```
-85–100  excellent
-70–84   good
-55–69   marginal
- 0–54   poor
+```text
+pressure_tendency_3h_hpa = (last_pressure - first_pressure) * (3 / full_prefetched_duration_hours)
 ```
 
-The label is included in `output_dict["label"]` for display and reason
-generation. It is **not** used for boosting — the raw 0–100 sub-score is
-returned directly as the first element of `(sub_score, output_dict)` from
-`score_window`.
+This fallback uses the full prefetched primary-model pressure series, not just
+the window span.
 
----
+Behavior:
 
-## 7. Reasons (machine-readable, snake_case)
+- if no primary-model pressure is present for any window hour, Laminar adds `pressure_unavailable` and records an informational rule
+- if a tendency is derived, it is scored on absolute value
+- if pressure exists but no tendency can be derived, no pressure reason is added and no pressure penalty is applied
 
-```
-low_gust_factor, high_gust_factor, very_gusty
-stable_direction, shifting_direction, very_shifty
-low_speed_range, high_speed_range
-low_cape, moderate_cape, high_cape
-model_agreement_good, model_disagreement, secondary_model_unavailable
-pressure_stable, pressure_unstable
-precipitation_risk, showers_risk
-cape_unavailable, pressure_unavailable
-missing_required_wind_data
-```
+Penalties when a tendency is available:
 
-Emit one reason per evaluated metric (the worst tier reached). Cap total
-reasons at ~6 to keep delivery output readable.
+| Tier | Condition | Penalty | Reason |
+|---|---|---|---|
+| good | `abs(tendency) <= 1.5` | `0` | `pressure_stable` |
+| warn | `> 1.5` and `<= 2.5` | `3` | `pressure_unstable` |
+| fail | `> 2.5` | `15` | `pressure_unstable` |
 
----
+The report rule message is `fallback_scaled` when the fallback path was used.
 
-## 8. Missing data rules
+### Model Agreement
 
-### Required (from primary model)
+Model agreement compares the resolved primary and secondary models using only
+wind direction and wind speed.
 
-If `wind_speed`, `wind_direction`, or `wind_gusts` is missing for any hour
-in the window from the primary model, return:
+Per timestamp with overlapping data:
 
-```python
-(None, {"score": None, "label": "unavailable",
-        "reasons": ["missing_required_wind_data"]})
+```text
+dir_delta = angular_distance(primary.wind_direction, secondary.wind_direction)
+speed_delta = abs(primary.wind_speed - secondary.wind_speed)
 ```
 
-The `None` sub-score opts the plugin out of the weighted mean; the
-composite score is computed from the remaining signals (wind_speed,
-wind_duration, other plugins) renormalized over their weights.
+For windows shorter than 4 hours, Laminar scores the `max` of each delta.
+For windows of 4 hours or more, it scores the 75th percentile of each delta.
 
-### Optional
+Penalties:
 
-Missing optional data → skip that penalty + emit the corresponding
-`*_unavailable` reason. Optional data: `cape`, `showers`, `pressure_msl`,
-secondary model.
+| Tier | Condition | Penalty | Reason |
+|---|---|---|---|
+| good | `dir <= 25` and `speed <= 5` | `0` | `model_agreement_good` |
+| warn | `dir <= 40` and `speed <= 8` | `7` | `model_disagreement` |
+| fail | otherwise | `25` | `model_disagreement` |
 
-### Primary model not in `contributing_models`
+If no secondary model can be resolved, or if there is no overlapping data
+between the primary and secondary model across the window, Laminar applies a
+`7` point penalty and adds `secondary_model_unavailable`.
 
-If the configured `primary_model` did not contribute to this window
-(e.g. it disagreed and was filtered out by `models_agree`), fall back to
-`contributing_models[0]` and add reason `primary_model_substituted`.
+## Label Mapping
 
----
+The compact output label is derived from the raw float score before rounding:
 
-## 9. Helpers and reuse
-
-- `angular_distance` and `vector_average_direction` already exist in
-  [evaluation.py](../src/parames/evaluation.py#L35) — import, do not
-  re-implement.
-- `LocationConfig` is in [common.py](../src/parames/common.py); the plugin
-  does not need its own location field (it always uses
-  `profile.location` — passed in via `prefetch`'s `client` invocation in
-  the same way Bise uses its configured locations).
-
-> **Note:** `prefetch` currently receives `client` and `models` but not the
-> alert location. Bise sidesteps this by carrying its own location config.
-> For laminar, the cleanest fix is to add `location` to the prefetch
-> signature on the protocol, since multiple future plugins will likely want
-> the alert location. Alternative (lower-impact): accept a `location` field
-> on `LaminarPluginConfig` defaulting to a copy of the alert location, set
-> by config validation. **Decision pending — flag at implementation time.**
-
----
-
-## 10. Integration point
-
-The CLI runner already calls `evaluate(profile)` →
-`build_candidate_windows` → `score_window(..., plugins=plugins)`. No runner
-changes needed for laminar:
-
-- Add `LaminarPluginConfig` to the discriminated `PluginConfig` union.
-- Register `LaminarPlugin` via `@register_plugin`.
-- Re-export from `plugins/__init__.py`.
-- Append a `- type: laminar` block to the alert profile in `config/default.yaml`.
-- Add `laminar: 1.0` under `scoring.weights.plugins` in `config/default.yaml`
-  so the aggregator picks up the weight from global config.
-
-The `plugin_outputs["laminar"]` dict flows through `CandidateWindow` into
-delivery (console + telegram) and persistence (`pyodmongo` MongoDB store)
-without any further code changes — both already serialize
-`plugin_outputs` generically.
-
-### Delivery surfacing (recommended, not required for v1)
-
-Console and Telegram channels currently render Bise via
-`plugin_outputs["bise"]["gradient_hpa"]`. To surface laminar in the same
-output, add a one-line render rule:
-
-```
-Laminar: good (82) — low_gust_factor, stable_direction, low_cape
-```
-
-This is a [delivery_*.py](../src/parames/delivery/) change, not a plugin
-change.
-
----
-
-## 11. Testing strategy
-
-Mirror [tests/unit/test_plugins_bise.py](../tests/unit/test_plugins_bise.py).
-
-| Test area | What to verify |
+| Score | Label |
 |---|---|
-| **Gust factor scoring** | Each tier (≤1.35 / ≤1.60 / >1.60) yields the right penalty + reason. |
-| **Direction stability** | Stable, shifty, and wrap-through-north windows score correctly via vector mean. |
-| **Speed stability** | Range thresholds; gust range tracked but not in penalty. |
-| **CAPE** | Penalty tiers + missing-CAPE → penalty skipped + `cape_unavailable`. |
-| **Precipitation / showers** | Any > 0 → 30 penalty + reason. `showers` missing alone is OK. |
-| **Model agreement** | Pairwise deltas at percentiles; secondary missing → +10 penalty + reason. |
-| **Pressure tendency** | 3h tendency normal case; window near horizon end uses fallback. |
-| **Label mapping** | Score boundaries (54/55/69/70/84/85) yield the correct label in output dict. |
-| **Sub-score pass-through** | `score_window` returns the raw 0–100 float as first element, not a clamped integer. |
-| **Missing required wind data** | Returns `(None, unavailable_dict)` and does not raise. |
-| **Disabled plugin** | `enabled=False` → `enabled` property false; `evaluate` skips it. |
-| **Primary model substitution** | Config primary not in `contributing_models` → falls back + reason. |
-| **Config validation** | Discriminator routes `type: laminar`; unknown fields rejected (`extra="forbid"` from `PluginConfigBase`). |
+| `85-100` | `excellent` |
+| `70-84.999...` | `good` |
+| `55-69.999...` | `marginal` |
+| `< 55` | `poor` |
 
-All tests construct `LaminarPrefetched` in-memory (no network).
+## Compact Output
 
-For integration coverage: extend the existing Open-Meteo snapshot fixture
-under [tests/fixtures/open_meteo](../tests/fixtures/open_meteo) so the
-plugin runs against a captured response. Re-capture with:
+When Laminar returns a score, `CandidateWindow.plugin_outputs["laminar"]`
+contains:
 
+```json
+{
+  "score": 82,
+  "label": "good",
+  "reasons": [
+    "low_gust_factor",
+    "stable_direction",
+    "low_speed_range",
+    "low_cape",
+    "pressure_stable",
+    "model_agreement_good"
+  ],
+  "metrics": {
+    "avg_gust_factor": 1.2,
+    "max_gust_spread_kmh": 4.0,
+    "direction_variability_deg": 6.0,
+    "speed_range_kmh": 2.0,
+    "pressure_tendency_3h_hpa": 0.5,
+    "max_cape": 10.0,
+    "model_direction_delta_deg": 3.0,
+    "model_speed_delta_kmh": 1.0
+  },
+  "primary_model": "icon_d2",
+  "secondary_model": "ecmwf_ifs"
+}
 ```
-PARAMES_DEV_MODE=true uv run python scripts/capture_open_meteo_snapshot.py laminar_zurich
+
+Notes:
+
+- `score` is `round(sub_score)`
+- `reasons` is truncated to the first six entries
+- `secondary_model` may be `null`
+- `max_cape`, `model_direction_delta_deg`, and `model_speed_delta_kmh` appear only when those values are available
+
+## Report Output
+
+Laminar also emits a `PluginReport` with:
+
+- `summary`: `score=<rounded> label=<label>`
+- `config_snapshot`: full plugin config
+- `inputs`: resolved primary model, resolved secondary model, and contributing models
+- `metrics`: the same aggregate metrics used in the compact output
+- `rules`: ordered rule evaluations for model resolution, data gate, gusts, direction, speed range, CAPE, precipitation, showers, pressure tendency, and model agreement
+- `hourly`: one row per window hour with gust metrics, primary values, optional secondary values, and optional `dir_delta` and `speed_delta`
+
+The hourly rows are shaped like:
+
+```json
+{
+  "time": "2026-04-29T12:00:00+02:00",
+  "gust_factor": 1.2,
+  "gust_spread_kmh": 4.0,
+  "primary": {
+    "wind_speed": 20.0,
+    "wind_direction": 60.0,
+    "wind_gusts": 24.0,
+    "cape": 10.0,
+    "pressure_msl": 1015.0
+  },
+  "secondary": {
+    "wind_speed": 21.0,
+    "wind_direction": 63.0,
+    "wind_gusts": 25.0
+  },
+  "dir_delta": 3.0,
+  "speed_delta": 1.0
+}
 ```
 
----
+## Current Reason Set
 
-## 12. Implementation checklist
+The current implementation can emit these compact reasons:
 
-1. Create `src/parames/plugins/laminar.py` with config, prefetched type,
-   plugin class (`@register_plugin`).
-2. Extend `PluginConfig` discriminated union in `plugins/schemas.py`.
-3. Re-export from `plugins/__init__.py`.
-4. Resolve the `prefetch(location=...)` design question (§9 note) — either
-   add `location` to the protocol or carry it on the config.
-5. Unit tests under `tests/unit/test_plugins_laminar.py`.
-6. (Optional) Delivery one-liner in `delivery_cli.py` and
-   `delivery_telegram.py`.
-7. Add `- type: laminar` block to the alert profile in `config/default.yaml`.
-8. Add `laminar: 1.0` to `scoring.weights.plugins` in `config/default.yaml`.
-9. Capture an Open-Meteo snapshot covering gust + CAPE for replay tests.
+- `primary_model_substituted`
+- `missing_required_wind_data`
+- `low_gust_factor`
+- `high_gust_factor`
+- `very_gusty`
+- `stable_direction`
+- `shifting_direction`
+- `very_shifty`
+- `low_speed_range`
+- `high_speed_range`
+- `cape_unavailable`
+- `low_cape`
+- `moderate_cape`
+- `high_cape`
+- `precipitation_risk`
+- `showers_risk`
+- `pressure_unavailable`
+- `pressure_stable`
+- `pressure_unstable`
+- `secondary_model_unavailable`
+- `model_agreement_good`
+- `model_disagreement`
 
----
+## Aggregation and Delivery
 
-## 13. Out of scope for v1
+Laminar's composite weight is looked up from `scoring.weights.plugins.laminar`.
+The shipped default config sets that weight to `0.7`.
 
-- Tuning constants against historical real-world sessions (do this after
-  collecting forecast-vs-actual data; the plugin is a heuristic by design).
-- Boundary-layer-height and cloud-cover signals (kept on the wishlist but
-  not fetched in v1).
-- Per-hour laminar scoring (v1 is window-level only).
-- Webapp UI for laminar (the data is persisted and exposed via the existing
-  `plugin_outputs` field — UI is a separate task).
+Console and Telegram delivery both render Laminar as a short line using the
+compact output label and up to three reasons:
+
+```text
+Laminar: good (low_gust_factor, stable_direction, low_cape)
+```
