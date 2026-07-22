@@ -3,7 +3,9 @@ import logging
 
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from parames.config import RuntimeSettings
+from parames.config import RuntimeSettings, load_app_config
+from parames.logging import LogRecorder
+from parames.persistence import AlertRepository, build_engine
 from parames.runner import default_config_path, run
 
 logger = logging.getLogger(__name__)
@@ -17,6 +19,12 @@ logging.basicConfig(
 
 async def main() -> None:
     settings = RuntimeSettings()
+    engine = build_engine(settings.mongo_uri)
+    repo = AlertRepository(engine)
+    config = load_app_config(settings.config_path)
+    await engine._db["logs"].create_index("occurred_at", name="logs_ttl", expireAfterSeconds=config.logging.retention_days * 86400)
+    recorder = LogRecorder(repo, "scheduler")
+    recorder.install()
 
     scheduler = AsyncIOScheduler(timezone="Europe/Zurich")
 
@@ -44,6 +52,8 @@ async def main() -> None:
     except (KeyboardInterrupt, asyncio.CancelledError):
         logger.info("Stopping scheduler...")
         scheduler.shutdown(wait=False)
+    finally:
+        recorder.close()
 
 if __name__ == "__main__":
     try:

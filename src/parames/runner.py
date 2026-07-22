@@ -10,6 +10,7 @@ from parames.domain import CandidateWindow
 from parames.evaluation import evaluate
 from parames.forecast import OpenMeteoForecastClient
 from parames.persistence import AlertRepository, build_engine
+from parames.logging import run_log_context
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +136,7 @@ async def run(config_path: Path) -> None:
     status: str = "completed"
     error: str | None = None
     try:
-        with OpenMeteoForecastClient() as client:
+        with run_log_context(run_doc.id), OpenMeteoForecastClient() as client:
             for definition, profile in zip(definitions, resolved):
                 profile_suppress = {
                     ch: _resolve_suppress(

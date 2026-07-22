@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 import sys
 from collections.abc import Sequence
 from typing import Protocol
@@ -14,15 +13,13 @@ from parames.domain import CandidateWindow, WindowHour
 
 
 def _make_console() -> Console:
-    # On Windows, sys.stdout may default to cp1252 which can't encode emojis.
-    # Wrap the underlying binary buffer with utf-8 so Rich can write any character.
-    # Fall back to stderr when running headlessly (e.g. scheduler) where stdout is closed.
+    # Write through the active text stream. In particular, this must not bypass the
+    # process stream capture via ``sys.stdout.buffer``: console output is INFO, not
+    # an error merely because it was rendered by Rich.
     try:
-        file = io.TextIOWrapper(
-            sys.stdout.buffer, encoding="utf-8", errors="replace", line_buffering=True
-        )
-        return Console(file=file, legacy_windows=False)
+        return Console(file=sys.stdout, legacy_windows=False)
     except (AttributeError, ValueError):
+        # stdout can be unavailable in a genuinely headless process.
         return Console(file=sys.stderr, legacy_windows=False)
 
 

@@ -48,4 +48,5 @@ export const api = {
   },
   getDetection: (id) => request(`/detections/${id}`),
   listDeliveries: (limit = 25) => request(`/deliveries?limit=${limit}`),
+  listLogs: (params = {}) => request(`/logs?${new URLSearchParams(params)}`),
 };

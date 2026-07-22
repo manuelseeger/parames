@@ -19,6 +19,8 @@ from parames.plugins.laminar import LaminarPluginConfig
 
 RunStatus = Literal["running", "completed", "failed"]
 DeliveryStatus = Literal["sent", "failed", "skipped"]
+LogService = Literal["api", "scheduler"]
+LogSource = Literal["logging", "stream"]
 
 
 def _utcnow() -> datetime:
@@ -91,6 +93,23 @@ class Detection(DbModel):
             name="alert_local_date_start",
         ),
         IndexModel([("alert_definition_id", ASCENDING)], name="alert_definition_id"),
+    ]
+
+
+class LogEntry(DbModel):
+    occurred_at: datetime = Field(default_factory=_utcnow)
+    service: LogService
+    level: str
+    logger_name: str | None = None
+    source: LogSource
+    text: str
+    run_id: Id | None = None
+
+    _collection: ClassVar = "logs"
+    _indexes: ClassVar = [
+        IndexModel([("occurred_at", DESCENDING), ("_id", DESCENDING)], name="logs_newest"),
+        IndexModel([("service", ASCENDING), ("occurred_at", DESCENDING)], name="logs_service_newest"),
+        IndexModel([("run_id", ASCENDING), ("occurred_at", DESCENDING)], name="logs_run_newest"),
     ]
 
 

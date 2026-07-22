@@ -8,3 +8,6 @@ __pycache__/
 .playwright-cli/
 webapp/node_modules/
 webapp/dist/
+
+.github/
+.pi/

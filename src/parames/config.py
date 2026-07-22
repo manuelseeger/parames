@@ -22,6 +22,7 @@ __all__ = [
     "DeliveryChannelConfig",
     "DryConfig",
     "LocationConfig",
+    "LoggingConfig",
     "ModelAgreementConfig",
     "RuntimeSettings",
     "SchedulerConfig",
@@ -95,6 +96,10 @@ class SchedulerConfig(BaseModel):
     cron_minute: str | None = None
 
 
+class LoggingConfig(BaseModel):
+    retention_days: int = Field(default=30, ge=1)
+
+
 class ScoringWeightsConfig(MainBaseModel):
     wind_speed: float = Field(default=1.0, ge=0)
     plugins: dict[str, float] = Field(default_factory=lambda: {"bise": 0.5})
@@ -146,6 +151,7 @@ class AlertProfileConfig(BaseModel):
 class AppConfig(BaseModel):
     defaults: DefaultsConfig = Field(default_factory=DefaultsConfig)
     scoring: ScoringConfig = Field(default_factory=ScoringConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
     alerts: list[AlertProfileConfig] = Field(default_factory=list)
     delivery_channels: dict[str, DeliveryChannelConfig]

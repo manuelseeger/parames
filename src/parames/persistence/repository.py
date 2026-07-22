@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
+from bson import ObjectId
 from pyodmongo import AsyncDbEngine
 
 from parames.domain import CandidateWindow
@@ -15,6 +17,7 @@ from parames.persistence.models import (
     Detection,
     Run,
     RunStatus,
+    LogEntry,
 )
 
 
@@ -131,6 +134,37 @@ class AlertRepository:
 
     async def get_run(self, run_id) -> Run | None:
         return await self._engine.find_one(Model=Run, query=Run.id == run_id)
+
+    # ------------- Persisted logs (read-only outside this repository) -------------
+
+    async def record_log(self, entry: LogEntry) -> None:
+        await self._engine.save(entry)
+
+    async def list_logs(
+        self, *, limit: int = 200, service: str | None = None, min_level: str | None = None,
+        search: str | None = None, run_id: str | None = None, cursor: tuple[datetime, str] | None = None,
+    ) -> list[LogEntry]:
+        query: dict = {}
+        if service:
+            query["service"] = service
+        if min_level:
+            levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+            query["level"] = {"$in": levels[levels.index(min_level):]}
+        if search:
+            query["text"] = {"$regex": re.escape(search), "$options": "i"}
+        if run_id:
+            query["run_id"] = ObjectId(run_id)
+        if cursor:
+            occurred_at, entry_id = cursor
+            query["$or"] = [
+                {"occurred_at": {"$lt": occurred_at}},
+                {"occurred_at": occurred_at, "_id": {"$lt": ObjectId(entry_id)}},
+            ]
+        results = await self._engine.find_many(
+            Model=LogEntry, raw_query=query or None,
+            raw_sort={"occurred_at": -1, "_id": -1}, no_paginate_limit=limit,
+        )
+        return list(results)
 
     # ------------- Detections (formerly alerts) -------------
 

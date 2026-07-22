@@ -99,7 +99,7 @@ async function runNow() {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="run in runs" :key="run.id">
+              <tr v-for="run in runs" :key="run.id" style="cursor:pointer" @click="navigate(`/logs?run_id=${run.id}`)">
                 <td class="nowrap">{{ fmtDateTime(run.started_at) }}</td>
                 <td><span class="pill" :class="statusPill(run.status)">{{ run.status }}</span></td>
                 <td class="right">{{ run.windows_found }}</td>

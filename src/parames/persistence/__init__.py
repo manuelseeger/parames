@@ -1,4 +1,4 @@
-from parames.persistence.models import AlertDefinition, Delivery, Detection, Run
+from parames.persistence.models import AlertDefinition, Delivery, Detection, LogEntry, Run
 from parames.persistence.repository import (
     AlertRepository,
     build_engine,
@@ -11,6 +11,7 @@ __all__ = [
     "AlertRepository",
     "Delivery",
     "Detection",
+    "LogEntry",
     "Run",
     "build_engine",
     "is_same_event",
