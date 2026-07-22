@@ -5,6 +5,8 @@ Initial spec: [Initial Wind Alert](./spec/Initial%20Wind%20Alert.md)
 
 # Implementing 
 
+Use conventional commit messages
+
 ## Python standard
 
 Use: 
