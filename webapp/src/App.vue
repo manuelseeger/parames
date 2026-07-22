@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { route, match } from './router.js';
+import AppShell from './components/layout/AppShell.vue';
 import Dashboard from './views/Dashboard.vue';
 import AlertDefinitionsList from './views/AlertDefinitionsList.vue';
 import AlertDefinitionForm from './views/AlertDefinitionForm.vue';
@@ -22,24 +23,11 @@ const view = computed(() => {
   return null;
 });
 
-function isActive(prefix) {
-  if (prefix === '/') return route.value === '/' || route.value === '';
-  return route.value.startsWith(prefix);
-}
 </script>
 
 <template>
-  <div class="app">
-    <nav class="nav">
-      <span class="brand">Parames</span>
-      <a href="#/" :class="{ active: isActive('/') }">Dashboard</a>
-      <a href="#/alerts" :class="{ active: isActive('/alerts') }">Alert definitions</a>
-      <a href="#/detections" :class="{ active: isActive('/detections') }">Detections</a>
-      <a href="#/logs" :class="{ active: isActive('/logs') }">Logs</a>
-      <span class="spacer"></span>
-      <a href="/api/docs" target="_blank" class="muted">API docs</a>
-    </nav>
+  <AppShell>
     <component v-if="view" :is="view.component" v-bind="view.props || {}" />
     <div v-else class="card">Not found: <code>{{ route }}</code></div>
-  </div>
+  </AppShell>
 </template>

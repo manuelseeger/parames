@@ -2,6 +2,9 @@
 import { ref, computed, onMounted } from 'vue';
 import { api } from '../api.js';
 import AnalysisTab from './detection/AnalysisTab.vue';
+import StatusPill from '../components/ui/StatusPill.vue';
+import StatCard from '../components/detection/StatCard.vue';
+import { directionLabel, formatDate as fmtDate, formatTime as fmtTime } from '../utils/format.js';
 
 const props = defineProps({ id: String });
 
@@ -17,24 +20,6 @@ onMounted(async () => {
   }
 });
 
-function fmtDate(iso) {
-  return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function fmtTime(iso) {
-  return new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-}
-
-function classificationPill(c) {
-  if (c === 'excellent') return 'pill-excellent';
-  if (c === 'strong') return 'pill-ok';
-  if (c === 'candidate') return 'pill-warn';
-  return 'pill-muted';
-}
-
-function dirLabel(deg) {
-  return ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(deg / 45) % 8];
-}
 
 // ── Wind speed chart ─────────────────────────────────────────────────────────
 // SVG: 560 × 130, plot area x∈[48,548] y∈[10,100]
@@ -194,7 +179,7 @@ const hourlyArrows = computed(() => {
           <path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/>
         </svg>
         <h1 class="detection-detail-name">{{ detection.alert_name }}</h1>
-        <span class="pill" :class="classificationPill(detection.classification)">{{ detection.classification }}</span>
+        <StatusPill :value="detection.classification" type="classification" />
         <span class="muted" style="font-size:13px">Score {{ detection.score ?? 'unavailable' }}</span>
         <span v-if="detection.seen_count > 1" class="muted" style="font-size:13px">· seen {{ detection.seen_count }}×</span>
       </div>
@@ -205,36 +190,12 @@ const hourlyArrows = computed(() => {
 
       <!-- Stat cards ─────────────────────────────────────────────────── -->
       <div class="stat-cards-row">
-        <div class="stat-card">
-          <div class="stat-card-label">Duration</div>
-          <div class="stat-card-value">{{ detection.window.duration_hours }}</div>
-          <div class="stat-card-unit">hours</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-card-label">Avg Wind</div>
-          <div class="stat-card-value">{{ Math.round(detection.window.avg_wind_speed_kmh) }}</div>
-          <div class="stat-card-unit">km/h</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-card-label">Max Wind</div>
-          <div class="stat-card-value">{{ Math.round(detection.window.max_wind_speed_kmh) }}</div>
-          <div class="stat-card-unit">km/h</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-card-label">Direction</div>
-          <div class="stat-card-value" style="font-size:20px">{{ dirLabel(detection.window.avg_direction_deg) }}</div>
-          <div class="stat-card-unit">{{ Math.round(detection.window.avg_direction_deg) }}°</div>
-        </div>
-        <div v-if="detection.window.avg_precipitation_mm_per_hour != null" class="stat-card">
-          <div class="stat-card-label">Avg Precip</div>
-          <div class="stat-card-value" style="font-size:20px">{{ detection.window.avg_precipitation_mm_per_hour.toFixed(1) }}</div>
-          <div class="stat-card-unit">mm/h</div>
-        </div>
-        <div v-if="detection.window.models.length" class="stat-card">
-          <div class="stat-card-label">Models</div>
-          <div class="stat-card-value" style="font-size:20px">{{ detection.window.models.length }}</div>
-          <div class="stat-card-unit">forecast</div>
-        </div>
+        <StatCard label="Duration" :value="detection.window.duration_hours" unit="hours" />
+        <StatCard label="Avg Wind" :value="Math.round(detection.window.avg_wind_speed_kmh)" unit="km/h" />
+        <StatCard label="Max Wind" :value="Math.round(detection.window.max_wind_speed_kmh)" unit="km/h" />
+        <StatCard label="Direction" :value="directionLabel(detection.window.avg_direction_deg)" :unit="`${Math.round(detection.window.avg_direction_deg)}°`" />
+        <StatCard v-if="detection.window.avg_precipitation_mm_per_hour != null" label="Avg Precip" :value="detection.window.avg_precipitation_mm_per_hour.toFixed(1)" unit="mm/h" />
+        <StatCard v-if="detection.window.models.length" label="Models" :value="detection.window.models.length" unit="forecast" />
       </div>
 
       <!-- Tab strip ──────────────────────────────────────────────────── -->
@@ -351,7 +312,7 @@ const hourlyArrows = computed(() => {
                 <!-- Center hub -->
                 <circle cx="48" cy="48" r="3.5" fill="#1f2933"/>
                 <!-- Degree label in center area -->
-                <text x="48" y="80" text-anchor="middle" font-size="9" fill="#7b8794">{{ dirLabel(detection.window.avg_direction_deg) }} · {{ Math.round(detection.window.avg_direction_deg) }}°</text>
+                <text x="48" y="80" text-anchor="middle" font-size="9" fill="#7b8794">{{ directionLabel(detection.window.avg_direction_deg) }} · {{ Math.round(detection.window.avg_direction_deg) }}°</text>
               </svg>
             </div>
 

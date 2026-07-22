@@ -2,6 +2,7 @@
 import { ref, reactive, onMounted, computed } from 'vue';
 import { api } from '../api.js';
 import { navigate } from '../router.js';
+import LocationFields from '../components/forms/LocationFields.vue';
 
 const props = defineProps({
   id: { type: String, default: null },
@@ -200,20 +201,7 @@ function cancel() { navigate('/alerts'); }
 
       <section class="card">
         <h2>Location</h2>
-        <div class="field-row">
-          <div class="field">
-            <label>Name</label>
-            <input type="text" v-model="def.location.name" required>
-          </div>
-          <div class="field">
-            <label>Latitude</label>
-            <input type="number" step="any" v-model.number="def.location.latitude" required>
-          </div>
-          <div class="field">
-            <label>Longitude</label>
-            <input type="number" step="any" v-model.number="def.location.longitude" required>
-          </div>
-        </div>
+        <LocationFields :location="def.location" />
       </section>
 
       <section class="card">
@@ -325,35 +313,9 @@ function cancel() { navigate('/alerts'); }
               </div>
             </div>
             <h3 class="plugin-subheader">West reference</h3>
-            <div class="field-row">
-              <div class="field">
-                <label>Name</label>
-                <input type="text" v-model="p.pressure_reference_west.name" required>
-              </div>
-              <div class="field">
-                <label>Latitude</label>
-                <input type="number" step="any" v-model.number="p.pressure_reference_west.latitude" required>
-              </div>
-              <div class="field">
-                <label>Longitude</label>
-                <input type="number" step="any" v-model.number="p.pressure_reference_west.longitude" required>
-              </div>
-            </div>
+            <LocationFields :location="p.pressure_reference_west" />
             <h3 class="plugin-subheader">East reference</h3>
-            <div class="field-row">
-              <div class="field">
-                <label>Name</label>
-                <input type="text" v-model="p.pressure_reference_east.name" required>
-              </div>
-              <div class="field">
-                <label>Latitude</label>
-                <input type="number" step="any" v-model.number="p.pressure_reference_east.latitude" required>
-              </div>
-              <div class="field">
-                <label>Longitude</label>
-                <input type="number" step="any" v-model.number="p.pressure_reference_east.longitude" required>
-              </div>
-            </div>
+            <LocationFields :location="p.pressure_reference_east" />
           </template>
 
           <!-- Laminar plugin fields -->

@@ -2,6 +2,8 @@
 import { ref, onMounted } from 'vue';
 import { api } from '../api.js';
 import { navigate } from '../router.js';
+import StatusPill from '../components/ui/StatusPill.vue';
+import { formatTimeRange } from '../utils/format.js';
 
 function fmtDateTime(iso) {
   if (!iso) return '—';
@@ -12,27 +14,7 @@ function fmtDateTime(iso) {
 }
 
 function fmtTimeRange(start, end) {
-  if (!start) return '—';
-  const s = new Date(start);
-  const e = new Date(end);
-  const date = s.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-  const st = s.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-  const et = e.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-  return `${date} ${st}–${et}`;
-}
-
-function statusPill(status) {
-  if (status === 'completed' || status === 'sent') return 'pill-ok';
-  if (status === 'running') return 'pill-warn';
-  if (status === 'failed') return 'pill-err';
-  return 'pill-muted';
-}
-
-function classificationPill(c) {
-  if (c === 'excellent') return 'pill-excellent';
-  if (c === 'strong') return 'pill-ok';
-  if (c === 'candidate') return 'pill-warn';
-  return 'pill-muted';
+  return start ? formatTimeRange(start, end, { includeDate: true }) : '—';
 }
 
 const runs = ref(null);
@@ -101,7 +83,7 @@ async function runNow() {
             <tbody>
               <tr v-for="run in runs" :key="run.id" style="cursor:pointer" @click="navigate(`/logs?run_id=${run.id}`)">
                 <td class="nowrap">{{ fmtDateTime(run.started_at) }}</td>
-                <td><span class="pill" :class="statusPill(run.status)">{{ run.status }}</span></td>
+                <td><StatusPill :value="run.status" /></td>
                 <td class="right">{{ run.windows_found }}</td>
                 <td class="right">
                   {{ run.deliveries_attempted }}
@@ -131,7 +113,7 @@ async function runNow() {
               >
                 <td>{{ d.alert_name }}</td>
                 <td class="nowrap">{{ fmtTimeRange(d.start, d.end) }}</td>
-                <td><span class="pill" :class="classificationPill(d.classification)">{{ d.classification }}</span></td>
+                <td><StatusPill :value="d.classification" type="classification" /></td>
                 <td class="right">{{ d.score ?? '—' }}</td>
               </tr>
             </tbody>
@@ -152,7 +134,7 @@ async function runNow() {
               <tr v-for="dl in deliveries" :key="dl.id">
                 <td class="nowrap">{{ fmtDateTime(dl.sent_at) }}</td>
                 <td>{{ dl.channel_name }} <span class="muted">({{ dl.channel_type }})</span></td>
-                <td><span class="pill" :class="statusPill(dl.status)">{{ dl.status }}</span></td>
+                <td><StatusPill :value="dl.status" /></td>
               </tr>
             </tbody>
           </table>

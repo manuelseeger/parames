@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import StatusPill from '../../components/ui/StatusPill.vue';
 
 const props = defineProps({ scoring: { type: Object, required: true } });
 
@@ -36,13 +37,6 @@ const tiers = computed(() => {
     { label: 'Excellent', value: t.excellent_min, pct: t.excellent_min },
   ];
 });
-
-function classificationPill(c) {
-  if (c === 'excellent') return 'pill-excellent';
-  if (c === 'strong') return 'pill-ok';
-  if (c === 'candidate') return 'pill-warn';
-  return 'pill-muted';
-}
 
 function n(v, dp = 2) {
   if (v === null || v === undefined) return '—';
@@ -94,7 +88,7 @@ function n(v, dp = 2) {
             &nbsp;→&nbsp;
             <strong class="num">{{ scoring.final_score ?? '—' }}</strong>
             &nbsp;
-            <span class="pill" :class="classificationPill(scoring.classification)">{{ scoring.classification }}</span>
+            <StatusPill :value="scoring.classification" type="classification" />
           </td>
         </tr>
       </tfoot>
