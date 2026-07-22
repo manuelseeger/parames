@@ -1,5 +1,5 @@
 name: parames
-x-ci-trigger: "1"
+x-ci-trigger: "2"
 
 services:
   api:
