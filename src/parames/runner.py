@@ -172,6 +172,10 @@ async def run(config_path: Path) -> None:
     except Exception as exc:  # noqa: BLE001
         status = "failed"
         error = str(exc)
+        # APScheduler logs uncaught job errors after this run context has ended.
+        # Log here so the persisted log is linked to the failed run as well.
+        with run_log_context(run_doc.id):
+            logger.exception("Alert run failed: %s", exc)
         raise
     finally:
         await repo.finish_run(

@@ -26,6 +26,8 @@ async function request(path, opts = {}) {
 }
 
 export const api = {
+  health: () => request('/healthz'),
+
   // alert definitions
   listAlertDefinitions: () => request('/alert-definitions'),
   getAlertDefinition: (id) => request(`/alert-definitions/${id}`),

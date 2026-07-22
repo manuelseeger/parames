@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import ssl
-from collections.abc import Iterable
+import time
+from collections.abc import Callable, Iterable
 from datetime import datetime
 from typing import Protocol
 from zoneinfo import ZoneInfo
@@ -46,6 +47,8 @@ class OpenMeteoForecastClient:
         base_url: str = OPEN_METEO_URL,
         timeout: float = 20.0,
         client: httpx.Client | None = None,
+        max_retries: int = 2,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self._owns_client = client is None
         self._client = client or httpx.Client(
@@ -53,6 +56,8 @@ class OpenMeteoForecastClient:
             timeout=timeout,
             verify=_create_default_ssl_context(),
         )
+        self._max_retries = max_retries
+        self._sleep = sleep
 
     def close(self) -> None:
         if self._owns_client:
@@ -73,18 +78,34 @@ class OpenMeteoForecastClient:
         forecast_days: int = 3,
         timezone: str = ZURICH_TIMEZONE,
     ) -> dict[datetime, HourForecast]:
-        response = self._client.get(
-            "",
-            params={
-                "latitude": location.latitude,
-                "longitude": location.longitude,
-                "hourly": ",".join(hourly_variables),
-                "models": model,
-                "forecast_days": forecast_days,
-                "timezone": timezone,
-                "wind_speed_unit": "kmh",
-            },
-        )
+        params = {
+            "latitude": location.latitude,
+            "longitude": location.longitude,
+            "hourly": ",".join(hourly_variables),
+            "models": model,
+            "forecast_days": forecast_days,
+            "timezone": timezone,
+            "wind_speed_unit": "kmh",
+        }
+        response: httpx.Response | None = None
+        for attempt in range(self._max_retries + 1):
+            try:
+                response = self._client.get("", params=params)
+            except httpx.TransportError as exc:
+                if attempt == self._max_retries:
+                    raise ForecastClientError(str(exc)) from exc
+                self._sleep(2**attempt)
+                continue
+            if response.status_code not in {429, 500, 502, 503, 504} or attempt == self._max_retries:
+                break
+            retry_after = response.headers.get("Retry-After")
+            try:
+                delay = min(30.0, max(0.0, float(retry_after))) if retry_after else 2**attempt
+            except ValueError:
+                delay = 2**attempt
+            self._sleep(delay)
+
+        assert response is not None
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:

@@ -42,6 +42,12 @@ code, pre, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size
   color: #1f2933;
 }
 
+.app-version {
+  color: #7b8794;
+  font-size: 12px;
+  margin-left: -18px;
+}
+
 .nav a {
   color: #52606d;
   font-weight: 500;

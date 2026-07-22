@@ -1,6 +1,6 @@
 [project]
 name = "parames"
-version = "0.1.1"
+version = "0.1.3"
 description = "Custom paragliding forecasting tool"
 readme = "README.md"
 requires-python = ">=3.13"

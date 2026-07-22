@@ -101,7 +101,7 @@ class LogRecorder:
     """Best-effort process-local sink. Persistence failures never escape callers."""
     def __init__(self, repo, service: Literal["api", "scheduler"]) -> None:
         self.repo, self.service = repo, service
-        self._stdout = self._stderr = None
+        self._stdout = self._stderr = self._handler = None
 
     def record(self, *, level: str, text: str, source: str, logger_name: str | None = None,
                occurred_at: datetime | None = None) -> None:
@@ -130,11 +130,15 @@ class LogRecorder:
         handler = _PersistingHandler(self)
         handler.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
         logging.getLogger().addHandler(handler)
+        self._handler = handler
         self._stdout = _CapturedStream(self, sys.stdout, "INFO")
         self._stderr = _CapturedStream(self, sys.stderr, "ERROR")
         sys.stdout, sys.stderr = self._stdout, self._stderr
 
     def close(self) -> None:
+        if self._handler:
+            logging.getLogger().removeHandler(self._handler)
+            self._handler = None
         if self._stdout:
             self._stdout.flush_partial()
             sys.stdout = self._stdout.original
