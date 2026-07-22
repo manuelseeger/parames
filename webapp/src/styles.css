@@ -366,6 +366,23 @@ code, pre, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size
   margin-top: 16px;
 }
 
+/* ============ logs ============ */
+.log-entry {
+  display: flex;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid #f0f4f8;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.log-message {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ============ utility ============ */
 .row { display: flex; gap: 8px; align-items: center; }
 .spacer { flex: 1; }

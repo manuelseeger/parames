@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { api } from '../api.js';
 
-const entries = ref([]), nextCursor = ref(null), error = ref(null), newAvailable = ref(false), autoRefresh = ref(false);
+const entries = ref([]), nextCursor = ref(null), error = ref(null), newAvailable = ref(false), autoRefresh = ref(false), reverseOrder = ref(false);
 const service = ref(''), minLevel = ref(''), search = ref('');
 const initialRun = new URLSearchParams((window.location.hash.split('?')[1] || '')).get('run_id') || '';
 const runId = ref(initialRun);
@@ -15,6 +15,7 @@ const filters = computed(() => {
   if (runId.value) p.run_id = runId.value;
   return p;
 });
+const displayedEntries = computed(() => reverseOrder.value ? [...entries.value].reverse() : entries.value);
 function plain(text) { return text.replace(/\x1B(?:[@-_][0-?]*[ -/]*[@-~]|\[[0-?]*[ -/]*[@-~])/g, ''); }
 function date(v) { return new Date(v).toLocaleString(); }
 async function refresh() {
@@ -46,14 +47,15 @@ onBeforeUnmount(() => clearInterval(timer));
       <label>Run ID <input v-model="runId"></label>
       <button class="btn btn-primary btn-sm" @click="refresh">Refresh</button>
       <label><input type="checkbox" v-model="autoRefresh"> Auto-refresh</label>
+      <label><input type="checkbox" v-model="reverseOrder"> Oldest first</label>
     </div>
     <div v-if="newAvailable" class="card" style="margin-top:12px"><button class="btn btn-sm" @click="refresh">New entries available — refresh</button></div>
     <div v-if="error" class="error">{{ error }}</div>
     <div class="card" style="margin-top:12px">
       <div v-if="!entries.length" class="empty-state">No matching logs</div>
-      <div v-for="entry in entries" :key="entry.id" class="log-entry">
+      <div v-for="entry in displayedEntries" :key="entry.id" class="log-entry">
         <span class="muted">{{ date(entry.occurred_at) }} {{ entry.service }} {{ entry.level }}{{ entry.logger_name ? ' ' + entry.logger_name : '' }}</span>
-        <pre>{{ plain(entry.text) }}</pre>
+        <span class="log-message">{{ plain(entry.text) }}</span>
       </div>
       <button v-if="nextCursor" class="btn btn-sm" @click="loadMore">Load more</button>
     </div>
