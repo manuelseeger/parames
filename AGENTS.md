@@ -2,7 +2,10 @@
 
 Initial spec: [Initial Wind Alert](./spec/Initial%20Wind%20Alert.md)
 
-# Python standard
+
+# Implementing 
+
+## Python standard
 
 Use: 
 - httpx
@@ -15,8 +18,13 @@ Use:
 - aiogram
 - pytest    
 
-
 uv for package managment and running
+
+## Versioning
+
+After implementing a feature, bump the version. Use your own judgement for major/minor/patch. 
+
+After a version bump, also update the `x-ci-trigger` field in ./deployment/docker-compose.yaml with the new version. 
 
 # Testing
 
