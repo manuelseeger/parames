@@ -86,12 +86,11 @@
         "icon_d2"
       ],
       "dry_filter_applied": false,
-      "score": 52,
+      "score": 62,
       "classification": "candidate",
       "subscores": {
-        "wind_speed": 18.492063492063497,
-        "wind_duration": 100.0,
-        "laminar": 95.0
+        "wind_speed": 49.27936048404207,
+        "laminar": 97.0
       },
       "hours": [
         {
@@ -172,7 +171,32 @@
           "in_window": false
         }
       ],
-      "plugin_outputs": {}
+      "plugin_outputs": {
+        "laminar": {
+          "score": 97,
+          "label": "excellent",
+          "reasons": [
+            "low_gust_factor",
+            "stable_direction",
+            "low_speed_range",
+            "low_cape",
+            "pressure_unstable",
+            "model_agreement_good"
+          ],
+          "metrics": {
+            "avg_gust_factor": 1.2,
+            "max_gust_spread_kmh": 2.5,
+            "direction_variability_deg": 12.1,
+            "speed_range_kmh": 1.8,
+            "pressure_tendency_3h_hpa": -2.1,
+            "max_cape": 20.0,
+            "model_direction_delta_deg": 5.5,
+            "model_speed_delta_kmh": 1.45
+          },
+          "primary_model": "ecmwf_ifs",
+          "secondary_model": "icon_d2"
+        }
+      }
     }
   ]
 }

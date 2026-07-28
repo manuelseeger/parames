@@ -73,7 +73,7 @@ def test_evaluate_hour_candidate_delegates_to_reasons() -> None:
 
 def _profile_with_agreement(min_models=2, required=True, default_config=None):
     if default_config is not None:
-        return default_config.alerts[0]
+        return next(a for a in default_config.alerts if a.name == "zurich_bise")
     from parames.config import AlertProfileConfig, WindConfig, ModelAgreementConfig, LocationConfig
     return AlertProfileConfig(
         name="test",
@@ -101,7 +101,7 @@ def _make_forecast(ts, speed=15.0, direction=60.0):
 
 
 def test_accepted_hour_has_no_rejection_reasons(default_config) -> None:
-    profile = default_config.alerts[0]
+    profile = next(a for a in default_config.alerts if a.name == "zurich_bise")
     forecasts = {
         model: {TS: _make_forecast(TS)}
         for model in profile.models
@@ -118,7 +118,7 @@ def test_accepted_hour_has_no_rejection_reasons(default_config) -> None:
 
 
 def test_min_models_not_met(default_config) -> None:
-    profile = default_config.alerts[0]
+    profile = next(a for a in default_config.alerts if a.name == "zurich_bise")
     # Only one model has valid data; min_models_matching=2
     forecasts = {
         profile.models[0]: {TS: _make_forecast(TS)},
@@ -135,10 +135,10 @@ def test_min_models_not_met(default_config) -> None:
 
 
 def test_model_agreement_failed(default_config) -> None:
-    profile = default_config.alerts[0]
+    profile = next(a for a in default_config.alerts if a.name == "zurich_bise")
     forecasts = {
-        profile.models[0]: {TS: _make_forecast(TS, direction=40.0, speed=15.0)},
-        profile.models[1]: {TS: _make_forecast(TS, direction=120.0, speed=15.0)},  # 80° apart
+        profile.models[0]: {TS: _make_forecast(TS, direction=35.0, speed=15.0)},
+        profile.models[1]: {TS: _make_forecast(TS, direction=95.0, speed=15.0)},  # 60° apart, both within zurich_bise's 30-100 range
     }
     evaluated, hour_eval = _evaluate_timestamp(
         timestamp=TS,
@@ -151,7 +151,7 @@ def test_model_agreement_failed(default_config) -> None:
 
 
 def test_wind_below_min_rejects_model(default_config) -> None:
-    profile = default_config.alerts[0]
+    profile = next(a for a in default_config.alerts if a.name == "zurich_bise")
     # Both models have data but wind is too slow
     forecasts = {
         model: {TS: HourForecast(time=TS, wind_speed=3.0, wind_direction=60.0)}
@@ -168,7 +168,7 @@ def test_wind_below_min_rejects_model(default_config) -> None:
 
 
 def test_evaluate_timestamp_matching_models_populated(default_config) -> None:
-    profile = default_config.alerts[0]
+    profile = next(a for a in default_config.alerts if a.name == "zurich_bise")
     forecasts = {
         model: {TS: _make_forecast(TS)}
         for model in profile.models
