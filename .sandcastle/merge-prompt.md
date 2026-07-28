@@ -1,26 +1,27 @@
 # TASK
 
-Merge the following branches into the current branch:
+Merge these dependent branches into root branch `{{ROOT_BRANCH}}`:
 
 {{BRANCHES}}
 
-For each branch:
+The sandbox is already on the root branch. Only integrate the listed branches; do not push branches, create or edit PRs, post comments, or close issues. Orchestration handles GitHub lifecycle actions.
 
-1. Run `git merge <branch> --no-edit`
-2. If there are merge conflicts, resolve them intelligently by reading both sides and choosing the correct resolution
-3. After resolving conflicts, run `npm run typecheck` and `npm run test` to verify everything works
-4. If tests fail, fix the issues before proceeding to the next branch
+# ISSUE CONTEXT
 
-After all branches are merged, make a single commit summarizing the merge.
+The following deterministic GitHub context contains the open issue set. Focus on root/dependent IDs `{{ISSUE_IDS}}` and their immediate formal parents:
 
-# CLOSE ISSUES
+<issues-context>
 
-For each branch that was merged, close its issue using the following command:
+!`repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner); owner=${repo%/*}; name=${repo#*/}; gh api graphql -f query='query($owner:String!,$name:String!) { repository(owner:$owner,name:$name) { issues(first:100,states:OPEN,orderBy:{field:CREATED_AT,direction:ASC}) { nodes { number title body labels(first:100) { nodes { name } } comments(first:100) { nodes { body } } parent { number title body labels(first:100) { nodes { name } } comments(first:100) { nodes { body } } } } } } }' -F owner="$owner" -F name="$name" --jq '.data.repository.issues.nodes'`
 
-`gh issue close <ID> --comment "Completed by Sandcastle"`
+</issues-context>
 
-Here are all the issues:
+# MERGE PROCESS
 
-{{ISSUES}}
+For each branch, run `git merge <branch> --no-edit`. Resolve conflicts using issue and repository context and run validation appropriate to the integrated work. If an individual merge cannot be completed safely, abort that merge so the root is clean, then continue with other branches when safe.
 
-Once you've merged everything you can, output <promise>COMPLETE</promise>.
+Use normal Git merge behavior. Do not squash, force `--no-ff`, or create a synthetic summary commit. Before completion, ensure the root worktree is clean and all successful integration work is committed. Partial success is valid.
+
+Only when this merge attempt and validation are finished, output:
+
+<promise>COMPLETE</promise>

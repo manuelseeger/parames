@@ -2,15 +2,22 @@
 
 Fix issue {{TASK_ID}}: {{ISSUE_TITLE}}
 
-Pull in the issue using `gh issue view <ID>`. If it has a parent PRD, pull that in too.
+Only work on this issue. Work on branch {{BRANCH}} and make conventional commits.
 
-Only work on the issue specified.
+# ISSUE CONTEXT
 
-Work on branch {{BRANCH}}. Make commits and run tests.
+The following is deterministic GitHub context for this issue and its immediate formal parent:
+
+<issue-context>
+
+!`repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner); owner=${repo%/*}; name=${repo#*/}; gh api graphql -f query='query($owner:String!,$name:String!,$number:Int!) { repository(owner:$owner,name:$name) { issue(number:$number) { number title body labels(first:100) { nodes { name } } comments(first:100) { nodes { body } } parent { number title body labels(first:100) { nodes { name } } comments(first:100) { nodes { body } } } } } }' -F owner="$owner" -F name="$name" -F number={{TASK_ID}} --jq '.data.repository.issue'`
+
+</issue-context>
 
 # CONTEXT
 
-Here are the last 10 commits:
+Root issue: #{{ROOT_ID}} — {{ROOT_TITLE}}
+Root branch: {{ROOT_BRANCH}}
 
 <recent-commits>
 
@@ -18,44 +25,14 @@ Here are the last 10 commits:
 
 </recent-commits>
 
-# EXPLORATION
-
-Explore the repo and fill your context window with relevant information that will allow you to complete the task.
-
-Pay extra attention to test files that touch the relevant parts of the code.
-
 # EXECUTION
 
-If applicable, use RGR to complete the task.
+Explore the repository and relevant tests before changing code. Follow `AGENTS.md`, repository documentation, and issue/parent guidance. If applicable, use red-green-refactor. Choose and run verification appropriate to this issue.
 
-1. RED: write one test
-2. GREEN: write the implementation to pass that test
-3. REPEAT until done
-4. REFACTOR the code
+If the task is incomplete, preserve progress, leave a useful issue comment, and do not output the completion promise. Only when the issue is semantically complete, output:
 
-# FEEDBACK LOOPS
+<promise>COMPLETE</promise>
 
-Before committing, run `npm run typecheck` and `npm run test` to ensure the tests pass.
+# FINAL RULE
 
-# COMMIT
-
-Make a git commit. The commit message must comply with conventional commits, and:
-
-2. Include task completed + PRD reference
-3. Key decisions made
-4. Files changed
-5. Blockers or notes for next iteration
-
-Keep it concise.
-
-# THE ISSUE
-
-If the task is not complete, leave a comment on the issue with what was done.
-
-Do not close the issue - this will be done later.
-
-Once complete, output <promise>COMPLETE</promise>.
-
-# FINAL RULES
-
-ONLY WORK ON A SINGLE TASK.
+ONLY WORK ON THIS SINGLE ISSUE.
