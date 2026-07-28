@@ -1,3 +1,10 @@
-.venv
+.git/
+.env
+.venv/
+.sandcastle/.env
+.sandcastle/logs/
+.sandcastle/state/
+.sandcastle/worktrees/
+node_modules/
 webapp/node_modules/
 webapp/dist/

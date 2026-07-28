@@ -2,6 +2,15 @@
 
 Instructions on how to confirm that the current development state is correct and can be considered complete: 
 
+## General 
+
+For local testing start the API on port 7000
+
+Always run all local code with PARAMES_DEV_MODE=true
+
+PARAMES_DEV_MODE=true uv run uvicorn parames.api:app --host 0.0.0.0 --port 7000
+
+
 ## Unit testing
 - All unit tests pass
 - Use: pytest, pytest-mock
@@ -11,3 +20,6 @@ Instructions on how to confirm that the current development state is correct and
   - `test_*.py` - unit tests
   - `tests/integration/test_*.py` - integration tests
 
+## Frontend testing
+
+Use the playwright skill for testing the frontend in the browser.

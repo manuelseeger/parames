@@ -11,3 +11,4 @@ webapp/dist/
 
 .github/
 .pi/
+node_modules/
