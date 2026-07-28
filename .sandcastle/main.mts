@@ -31,9 +31,10 @@ if (!Number.isInteger(MAX_CONCURRENCY) || MAX_CONCURRENCY < 1) {
   throw new Error("SANDCASTLE_CONCURRENCY must be a positive integer");
 }
 
-// Keep every agent on Claude Sonnet with high effort during local rollout.
+const highEffortAgent = () =>
+  sandcastle.claudeCode("claude-opus-5", { effort: "high" });
 const agent = () =>
-  sandcastle.claudeCode("claude-sonnet-4-6", { effort: "high" });
+  sandcastle.claudeCode("claude-sonnet-5", { effort: "high" });
 
 // Install the locked Python environment before an agent starts.
 const hooks = {
@@ -65,7 +66,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     // One iteration is enough: the planner just needs to read and reason,
     // not write code. (Structured output requires maxIterations: 1.)
     maxIterations: 1,
-    agent: agent(),
+    agent: highEffortAgent(),
     promptFile: "./.sandcastle/plan-prompt.md",
     // Extract and validate the <plan> JSON into a typed object. Throws
     // StructuredOutputError if the tag is missing, the JSON is malformed, or
@@ -202,7 +203,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     sandbox: docker(),
     name: "merger",
     maxIterations: 1,
-    agent: agent(),
+    agent: highEffortAgent(),
     promptFile: "./.sandcastle/merge-prompt.md",
     promptArgs: {
       // A markdown list of branch names, one per line.
