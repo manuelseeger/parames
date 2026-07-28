@@ -47,7 +47,7 @@ class OpenMeteoForecastClient:
         base_url: str = OPEN_METEO_URL,
         timeout: float = 20.0,
         client: httpx.Client | None = None,
-        max_retries: int = 2,
+        max_retries: int = 5,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self._owns_client = client is None
@@ -55,6 +55,7 @@ class OpenMeteoForecastClient:
             base_url=base_url,
             timeout=timeout,
             verify=_create_default_ssl_context(),
+            headers={"User-Agent": "parames/0.1 (paragliding forecast alerts)"},
         )
         self._max_retries = max_retries
         self._sleep = sleep
@@ -96,7 +97,7 @@ class OpenMeteoForecastClient:
                     raise ForecastClientError(str(exc)) from exc
                 self._sleep(2**attempt)
                 continue
-            if response.status_code not in {429, 500, 502, 503, 504} or attempt == self._max_retries:
+            if response.status_code not in {408, 429, 500, 502, 503, 504} or attempt == self._max_retries:
                 break
             retry_after = response.headers.get("Retry-After")
             try:

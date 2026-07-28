@@ -125,3 +125,5 @@ delivery_channels:
 
 scheduler:
   cron_hour: "*/6"
+  # Spread requests out to reduce Open-Meteo overloads at the hour.
+  jitter_seconds: 300
