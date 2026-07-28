@@ -1,5 +1,25 @@
-// Parallel planner with implementation, review, and integration phases.
-// Run with `npm run sandcastle` after building the sandbox image.
+// Parallel Planner with Review — four-phase orchestration loop
+//
+// This template drives a multi-phase workflow:
+//   Phase 1 (Plan):             An opus agent analyzes open issues, builds a
+//                               dependency graph, and outputs a <plan> JSON
+//                               listing unblocked issues with branch names.
+//   Phase 2 (Execute + Review): For each issue, a sandbox is created via
+//                               createSandbox(). The implementer runs first
+//                               (100 iterations). If it produces commits, a
+//                               reviewer runs in the same sandbox on the same
+//                               branch (1 iteration). All issue pipelines run
+//                               concurrently via Promise.allSettled().
+//   Phase 3 (Merge):            A single agent merges all completed branches
+//                               into the current branch.
+//
+// The outer loop repeats up to MAX_ITERATIONS times so that newly unblocked
+// issues are picked up after each round of merges.
+//
+// Usage:
+//   npx tsx .sandcastle/main.mts
+// Or add to package.json:
+//   "scripts": { "sandcastle": "npx tsx .sandcastle/main.mts" }
 
 import * as sandcastle from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
@@ -22,26 +42,17 @@ const planSchema = z.object({
 // Maximum number of plan→execute→merge cycles before stopping.
 // Raise this if your backlog is large; lower it for a quick smoke-test run.
 const MAX_ITERATIONS = 10;
-const MAX_CONCURRENCY = Number.parseInt(
-  process.env.SANDCASTLE_CONCURRENCY ?? "1",
-  10,
-);
 
-if (!Number.isInteger(MAX_CONCURRENCY) || MAX_CONCURRENCY < 1) {
-  throw new Error("SANDCASTLE_CONCURRENCY must be a positive integer");
-}
-
-const highEffortAgent = () =>
-  sandcastle.claudeCode("claude-opus-5", { effort: "high" });
-const agent = () =>
-  sandcastle.claudeCode("claude-sonnet-5", { effort: "high" });
-
-// Install the locked Python environment before an agent starts.
+// Hooks run inside the sandbox before the agent starts each iteration.
+// npm install ensures the sandbox always has fresh dependencies.
 const hooks = {
-  sandbox: {
-    onSandboxReady: [{ command: "PARAMES_DEV_MODE=true uv sync --locked" }],
-  },
+  sandbox: { onSandboxReady: [{ command: "npm install" }] },
 };
+
+// Copy node_modules from the host into the worktree before each sandbox
+// starts. Avoids a full npm install from scratch; the hook above handles
+// platform-specific binaries and any packages added since the last copy.
+const copyToWorktree = ["node_modules"];
 
 // ---------------------------------------------------------------------------
 // Main loop
@@ -53,7 +64,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   // -------------------------------------------------------------------------
   // Phase 1: Plan
   //
-  // The planning agent reads the open issue list,
+  // The planning agent (opus, for deeper reasoning) reads the open issue list,
   // builds a dependency graph, and selects the issues that can be worked in
   // parallel right now (i.e., no blocking dependencies on other open issues).
   //
@@ -66,7 +77,8 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     // One iteration is enough: the planner just needs to read and reason,
     // not write code. (Structured output requires maxIterations: 1.)
     maxIterations: 1,
-    agent: highEffortAgent(),
+    // Opus for planning: dependency analysis benefits from deeper reasoning.
+    agent: sandcastle.claudeCode("claude-opus-4-8"),
     promptFile: "./.sandcastle/plan-prompt.md",
     // Extract and validate the <plan> JSON into a typed object. Throws
     // StructuredOutputError if the tag is missing, the JSON is malformed, or
@@ -99,60 +111,55 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   // Promise.allSettled means one failing pipeline doesn't cancel the others.
   // -------------------------------------------------------------------------
 
-  const settled: PromiseSettledResult<sandcastle.SandboxRunResult>[] = [];
+  const settled = await Promise.allSettled(
+    issues.map(async (issue) => {
+      const sandbox = await sandcastle.createSandbox({
+        branch: issue.branch,
+        sandbox: docker(),
+        hooks,
+        copyToWorktree,
+      });
 
-  for (let offset = 0; offset < issues.length; offset += MAX_CONCURRENCY) {
-    const batch = issues.slice(offset, offset + MAX_CONCURRENCY);
-    const outcomes = await Promise.allSettled(
-      batch.map(async (issue) => {
-        const sandbox = await sandcastle.createSandbox({
-          branch: issue.branch,
-          sandbox: docker(),
-          hooks,
+      try {
+        // Run the implementer
+        const implement = await sandbox.run({
+          name: "implementer",
+          maxIterations: 100,
+          agent: sandcastle.claudeCode("claude-opus-4-8"),
+          promptFile: "./.sandcastle/implement-prompt.md",
+          promptArgs: {
+            TASK_ID: issue.id,
+            ISSUE_TITLE: issue.title,
+            BRANCH: issue.branch,
+          },
         });
 
-        try {
-          // Run the implementer
-          const implement = await sandbox.run({
-            name: "implementer",
-            maxIterations: 100,
-            agent: agent(),
-            promptFile: "./.sandcastle/implement-prompt.md",
+        // Only review if the implementer produced commits
+        if (implement.commits.length > 0) {
+          const review = await sandbox.run({
+            name: "reviewer",
+            maxIterations: 1,
+            agent: sandcastle.claudeCode("claude-opus-4-8"),
+            promptFile: "./.sandcastle/review-prompt.md",
             promptArgs: {
-              TASK_ID: issue.id,
-              ISSUE_TITLE: issue.title,
               BRANCH: issue.branch,
             },
           });
 
-          // Only review if the implementer produced commits
-          if (implement.commits.length > 0) {
-            const review = await sandbox.run({
-              name: "reviewer",
-              maxIterations: 1,
-              agent: agent(),
-              promptFile: "./.sandcastle/review-prompt.md",
-              promptArgs: {
-                BRANCH: issue.branch,
-              },
-            });
-
-            // Merge commits from both runs so the merge phase sees all of them.
-            // Each sandbox.run() only returns commits from its own run.
-            return {
-              ...review,
-              commits: [...implement.commits, ...review.commits],
-            };
-          }
-
-          return implement;
-        } finally {
-          await sandbox.close();
+          // Merge commits from both runs so the merge phase sees all of them.
+          // Each sandbox.run() only returns commits from its own run.
+          return {
+            ...review,
+            commits: [...implement.commits, ...review.commits],
+          };
         }
-      }),
-    );
-    settled.push(...outcomes);
-  }
+
+        return implement;
+      } finally {
+        await sandbox.close();
+      }
+    }),
+  );
 
   // Log any agents that threw (network error, sandbox crash, etc.).
   for (const [i, outcome] of settled.entries()) {
@@ -195,14 +202,15 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   // One agent merges all completed branches into the current branch,
   // resolving any conflicts and running tests to confirm everything works.
   //
-  // The {{BRANCHES}} and {{ISSUES}} prompt arguments describe the work to integrate.
+  // The {{BRANCHES}} and {{ISSUES}} prompt arguments are lists that the agent
+  // uses to know which branches to merge and which issues to close.
   // -------------------------------------------------------------------------
   await sandcastle.run({
     hooks,
     sandbox: docker(),
     name: "merger",
     maxIterations: 1,
-    agent: highEffortAgent(),
+    agent: sandcastle.claudeCode("claude-opus-4-8"),
     promptFile: "./.sandcastle/merge-prompt.md",
     promptArgs: {
       // A markdown list of branch names, one per line.

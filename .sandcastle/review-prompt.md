@@ -47,8 +47,8 @@ Review the code changes on branch `{{BRANCH}}` and improve code clarity, consist
 If you find improvements to make:
 
 1. Make the changes directly on this branch
-2. Run `PARAMES_DEV_MODE=true uv sync --locked` and `PARAMES_DEV_MODE=true uv run pytest`
-3. Commit refinements with a conventional commit message
+2. Run tests and type checking to ensure nothing is broken
+3. Commit describing the refinements
 
 If the code is already clean and well-structured, do nothing.
 

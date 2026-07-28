@@ -84,13 +84,7 @@ The unattended workflow must instead create a dedicated feature integration bran
 
 The generated `merge-prompt.md` closes issues immediately after merging implementation branches. This bypasses human review.
 
-The new workflow must not close the root issue. The pull request body should contain `Closes #<issue-number>`, allowing GitHub to close the issue only when the human-approved pull request is merged.
-
-### Planner granularity
-
-The generated planner parallelizes multiple GitHub issues. It does not decompose one feature request into internal implementation workstreams.
-
-The new planner must receive one root feature issue and produce a dependency-aware task graph. Small issues may produce one task; large issues may produce multiple tasks.
+The new workflow must not close the root issue or any included sub-issue during automation. The pull request body should contain a closing keyword for the root and every included open sub-issue completed by the run, allowing GitHub to close them only when the human-approved pull request is merged.
 
 ### Incorrect project verification
 
@@ -105,63 +99,6 @@ PARAMES_DEV_MODE=true uv run pytest
 
 Features involving the web UI must also use the repository's Playwright skill and run the API locally on port `7000`.
 
-### Incorrect commit convention
-
-The generated implementer requests commit messages prefixed with `RALPH:`. This repository requires conventional commit messages.
-
-All implementation, review, and integration commits must follow the conventional commit format.
-
-### Untracked Sandcastle setup
-
-The Sandcastle configuration, package manifest, and lockfile must be reviewed and committed before worktree-based execution. Resources such as `.sandcastle/CODING_STANDARDS.md` must be available inside task worktrees.
-
-Secrets, logs, generated worktrees, and `.sandcastle/.env` must remain ignored.
-
-## Agent and subscription configuration
-
-### Agent harness
-
-Use Sandcastle's Claude Code provider:
-
-```typescript
-sandcastle.claudeCode("claude-sonnet-4-6", { effort: "high" })
-```
-
-Claude Code is required because the goal is to consume the Claude Pro subscription allowance through Anthropic's official coding-agent harness. Pi with Anthropic authentication is not used for unattended implementation because third-party harness usage may be billed as Anthropic extra usage rather than consuming the normal plan allowance.
-
-### Authentication
-
-Generate a Claude Code token once on a trusted interactive machine:
-
-```bash
-claude setup-token
-```
-
-Provide the resulting token to Sandcastle as:
-
-```text
-CLAUDE_CODE_OAUTH_TOKEN
-```
-
-The token must be stored outside the repository and injected at runtime. It must never be committed, copied into the Docker image, or printed in logs.
-
-### Model strategy
-
-Start with Claude Sonnet for all phases to reduce subscription usage:
-
-- Planner: Sonnet with high effort
-- Implementer: Sonnet with high effort
-- Reviewer: Sonnet with high effort
-- Integrator: Sonnet with high effort
-- Final reviewer: Sonnet with high effort
-
-A stronger model may later be used selectively for planning or conflict resolution after usage behavior is understood.
-
-### Concurrency
-
-Claude Pro has usage and rate limits. Initial concurrency must be limited to one agent. After successful local tests, raise the maximum to two agents and observe subscription behavior before increasing it further.
-
-The workflow must make concurrency configurable.
 
 ## Issue authorization and state model
 
@@ -169,12 +106,12 @@ The workflow must make concurrency configurable.
 
 An issue must not be processed merely because it exists or has a generic `enhancement` label. A trusted maintainer must explicitly authorize it.
 
-Required intake labels:
+Required intake labels for a root issue:
 
 - `Sandcastle`
 - `sandcastle:queued`
 
-Only trusted maintainers should have permission to add the `Sandcastle` label.
+Only trusted maintainers should have permission to add the `Sandcastle` label. Authorizing a root issue implicitly authorizes its existing GitHub sub-issues for the same run; sub-issues do not require Sandcastle labels of their own. Unrelated issues are not included.
 
 ### State labels
 
@@ -182,17 +119,19 @@ Use the following state labels:
 
 - `sandcastle:queued` — authorized and waiting
 - `sandcastle:in-progress` — claimed by a runner
-- `sandcastle:blocked` — requires human clarification or an external dependency
+- `sandcastle:blocked` — requires human clarification or has an open external dependency
 - `sandcastle:pr-ready` — implementation completed and a PR awaits review
 - `sandcastle:failed` — automation failed and requires inspection or retry
 
-The permanent `Sandcastle` authorization label remains present throughout processing.
+The permanent `Sandcastle` authorization label remains present throughout processing. Workflow state labels are applied only to the root issue; included sub-issues do not receive Sandcastle state labels.
 
-### One issue per pull request
+### One root issue per pull request
 
-Each orchestration run processes one root feature issue into one pull request. Multiple unrelated queued issues must not be combined into one PR.
+A root issue is an authorized queued issue selected as the top-level unit of work for a run, even when that issue itself has a GitHub parent. In that case, only the selected issue's descendant subtree is included; its ancestors are context rather than work items. Each orchestration run processes one root issue and its included sub-issues into one pull request. Multiple unrelated queued root issues must not be combined into one PR.
 
-The default selection policy is the oldest queued issue. Priority labels may be introduced later.
+Every included issue in the root's full recursive sub-issue hierarchy is treated as an existing atomic work item rather than being decomposed into newly created issues. The orchestrator refreshes the recursive hierarchy before every dependency wave, before final review, and immediately before marking the pull request ready, automatically adding newly discovered sub-issues to the run. Scope freezes when the pull request is marked ready; later additions require human action or a follow-up run. If an issue is removed before work starts, it is dropped from the run. If work on it has started or been merged, removal blocks the run for maintainer direction; the orchestrator never reverts or discards that work automatically. At each refresh, changed requirements or dependency metadata are re-planned for pending issues. A semantic change to an issue that is running, completed, or merged blocks the run for maintainer review; clearly non-semantic edits may be accepted without reopening work. Closed descendants remain available as planning context but are not scheduled. Dependencies may connect issues at any level of that hierarchy. The dependency graph combines explicit GitHub dependency metadata or references with technical ordering inferred by the planner; explicit edges are authoritative, and inferred edges may add constraints for required APIs, decisions, or conflicting changes. Within one authorized root run, Sandcastle may satisfy a dependency by implementing, verifying, and integrating the prerequisite issue into the root issue branch. An issue outside the selected root hierarchy is never included implicitly and satisfies a dependency only when GitHub reports it closed; code or an unmerged PR alone is insufficient. An open external dependency blocks the run. The root commonly supplies user stories and overall acceptance criteria while its sub-issues carry most implementation work. Only the selected root may be tracking-only. The planner records whether the root has requirements not covered by descendants; if not, it receives final acceptance validation but no dedicated implementation assignment. Every included open descendant is an atomic implementation issue, even when it has descendants of its own. Final feature review may still apply and commit integration fixes or refactoring directly on the root issue branch.
+
+The runner evaluates queued roots in age order. A candidate with an open dependency outside its selected hierarchy is moved to `sandcastle:blocked`, receives a comment identifying the dependency, and is skipped so another eligible root can run. Reconciliation automatically returns it to `sandcastle:queued` when all external dependencies are closed. Priority labels may be introduced later.
 
 ### Claiming
 
@@ -207,37 +146,39 @@ The runner must use a host process lock so only one process can claim work for a
 
 ## Branch model
 
-For root issue `#42`, use deterministic branch names:
+For root issue `#42` with sub-issues `#43`, `#44`, and `#45`, use deterministic branch names based on GitHub issue numbers:
 
 ```text
 main
-└── sandcastle/feature-42
-    ├── sandcastle/feature-42/task-models
-    ├── sandcastle/feature-42/task-scheduler
-    └── sandcastle/feature-42/task-ui
+└── sandcastle/issue-42
+    ├── sandcastle/issue-43
+    ├── sandcastle/issue-44
+    └── sandcastle/issue-45
 ```
 
-### Feature integration branch
+### Root issue branch
 
-The branch `sandcastle/feature-<issue-number>` is the only branch pushed as the pull request head. It starts from the current `origin/main` when processing begins.
+The branch `sandcastle/issue-<root-issue-number>` is the run's integration branch and the only branch pushed as the pull request head. It starts from the current `origin/main` when processing begins.
 
-Task branches are merged into this branch, never directly into `main`.
+Sub-issue branches are merged into the root issue branch, never directly into `main`.
 
-### Task branches
+### Sub-issue branches
 
-Each task branch uses a deterministic, planner-generated identifier. Task identifiers must be stable across retries.
+Each included open sub-issue uses `sandcastle/issue-<issue-number>`. Existing GitHub issue numbers provide stable identifiers across retries; the planner does not invent task IDs or branch names.
 
-A task branch is created from the latest feature integration branch after all of its dependencies have been merged. Independent tasks in the same dependency wave share the same integration base and may run concurrently.
+A sub-issue branch is created from the latest root issue branch after all of its dependencies have been merged. Independent issues in the same dependency wave share the same integration base and may run concurrently. Sub-issue branches are pushed after successful implementation and review checkpoints for crash recovery, but they never receive their own pull requests. Deletion requires a separate explicit cleanup policy.
+
+If the root has implementation requirements not covered by sub-issues, root-specific implementation is represented as a node in the dependency graph and runs directly on the root issue branch. Because that branch is also the integration target, root-specific implementation runs exclusively between dependency waves and never concurrently with sub-issue work. Its graph dependencies determine whether it runs before, between, or after sub-issues.
 
 ### Final pull request
 
 The final relationship is:
 
 ```text
-sandcastle/feature-42 -> main
+sandcastle/issue-42 -> main
 ```
 
-The automation may create the PR as a draft when work begins and mark it ready after final verification, or create it only after verification. The preferred design is a draft PR created early so progress is visible and branch ownership is clear.
+Immediately after claiming the root issue, the orchestrator creates and pushes its root issue branch, then finds or creates exactly one draft PR against `main`. It updates that PR throughout the run and marks it ready only after final review and deterministic verification succeed.
 
 ## End-to-end workflow
 
@@ -268,6 +209,7 @@ The automation must stop rather than reset or discard unexpected local changes.
 The planner receives:
 
 - Root issue number, title, body, and maintainer comments
+- The full ancestor chain as read-only context when the selected root has a GitHub parent, clearly marked as outside run scope
 - Relevant repository instructions and specifications
 - Current repository tree and recent commits
 - Project test and tooling constraints
@@ -310,6 +252,8 @@ An example output is:
   ]
 }
 ```
+
+If the dependency graph contains a cycle, including one created by inferred edges, the runner starts no implementation, marks the root `sandcastle:blocked`, and comments with the exact cycle so a maintainer can correct the dependencies or requirements.
 
 The schema must include at least:
 
@@ -423,14 +367,16 @@ For frontend features:
 
 A task may be merged only if required verification commands return zero.
 
-### Phase 7: Task integration
+### Phase 7: Issue integration
 
-After a task passes review and deterministic verification:
+After a sub-issue passes review and deterministic verification:
 
-1. Merge the task branch into `sandcastle/feature-<issue-number>`.
-2. Preserve task commits rather than squashing automatically unless a later policy specifies otherwise.
-3. Record the merged task and commit SHA in run state.
-4. Recompute newly unblocked tasks.
+1. Merge the sub-issue branch with `--no-ff` and a conventional integration commit such as `chore(sandcastle): integrate issue #43`.
+2. Preserve its implementation and review commits rather than squashing.
+3. Record the merged issue and commit SHA in run state.
+4. Push the updated root issue branch so the draft PR reflects progress.
+5. Add one concise comment to the integrated sub-issue linking the root draft PR and naming the integrated commit; do not close it.
+6. Refresh the hierarchy and recompute newly unblocked issues.
 
 If merge conflicts occur, run a dedicated integration agent in a sandbox on the feature branch. It receives:
 
@@ -445,7 +391,9 @@ The orchestrator must then rerun deterministic verification.
 
 ### Phase 8: Final feature review
 
-After all tasks are integrated, run a final reviewer against:
+After all included issue work is integrated, fetch `origin/main` and merge its latest tip into the root issue branch with a normal merge commit. Never rebase or force-push. A dedicated integration agent resolves conflicts, and deterministic verification must pass after the merge.
+
+Then run a final reviewer against:
 
 ```bash
 git diff origin/main...sandcastle/feature-<issue-number>
@@ -515,11 +463,12 @@ GitHub closes the root issue through the `Closes #<issue-number>` directive only
 
 When an implementation, review, sandbox, or verification step fails:
 
-1. Preserve the task branch.
-2. Preserve a dirty worktree when Sandcastle reports one.
-3. Save logs and session IDs.
-4. Stop dependent tasks.
-5. Mark the root issue `sandcastle:failed` or `sandcastle:blocked` as appropriate.
+1. Preserve the failed sub-issue branch.
+2. Finish deterministic verification and integration for successful siblings already running in the same wave.
+3. Preserve all branches and any dirty worktree Sandcastle reports.
+4. Save logs and session IDs.
+5. Stop scheduling new work after the current wave, including otherwise independent work.
+6. Mark the root issue `sandcastle:failed` or `sandcastle:blocked` as appropriate.
 6. Add a concise issue comment with the failing phase and recovery instructions.
 7. Do not close the issue or merge incomplete work into `main`.
 
@@ -527,9 +476,9 @@ Independent completed task branches may remain merged into the feature branch if
 
 ### Human clarification
 
-If requirements are ambiguous or contradictory, the planner or implementer must stop and mark the issue blocked rather than guessing.
+If an existing issue is ambiguous, contradictory, or not atomic enough to implement safely, the planner or implementer must stop rather than guess, split it, or create new issues.
 
-The runner changes the state to `sandcastle:blocked` and asks a focused question in an issue comment. A maintainer can answer and return the issue to `sandcastle:queued`.
+The runner changes the root issue state to `sandcastle:blocked` and asks a focused question in a comment on the specific issue that needs clarification. If that is a sub-issue, the root may also receive a short comment linking to the blocking question. A maintainer can answer and return the root issue to `sandcastle:queued`.
 
 ### Authentication and rate limits
 

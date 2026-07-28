@@ -1,7 +1,5 @@
 FROM node:22-bookworm
 
-COPY --from=ghcr.io/astral-sh/uv:0.11.8 /uv /uvx /usr/local/bin/
-
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
   git \
@@ -30,15 +28,8 @@ USER ${AGENT_UID}:${AGENT_GID}
 # Install Claude Code CLI
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
-# Add Claude Code and the project environment to PATH.
-ENV PATH="/home/agent/.local/bin:/home/agent/.venv/bin:$PATH" \
-    UV_PROJECT_ENVIRONMENT="/home/agent/.venv"
-
-# Provision Python 3.13 and cache the locked project dependencies in the image.
-COPY --chown=${AGENT_UID}:${AGENT_GID} pyproject.toml uv.lock README.md /tmp/parames/
-WORKDIR /tmp/parames
-RUN uv python install 3.13 \
-  && uv sync --locked --no-install-project
+# Add Claude to PATH
+ENV PATH="/home/agent/.local/bin:$PATH"
 
 WORKDIR /home/agent
 

@@ -1,26 +1,26 @@
 # TASK
 
-Merge the following branches into the current integration branch:
+Merge the following branches into the current branch:
 
 {{BRANCHES}}
 
 For each branch:
 
-1. Run `git merge <branch> --no-edit`.
-2. Resolve conflicts by checking both implementations against their issue requirements.
-3. Run deterministic verification:
+1. Run `git merge <branch> --no-edit`
+2. If there are merge conflicts, resolve them intelligently by reading both sides and choosing the correct resolution
+3. After resolving conflicts, run `npm run typecheck` and `npm run test` to verify everything works
+4. If tests fail, fix the issues before proceeding to the next branch
 
-   ```bash
-   PARAMES_DEV_MODE=true uv sync --locked
-   PARAMES_DEV_MODE=true uv run pytest
-   ```
+After all branches are merged, make a single commit summarizing the merge.
 
-4. Fix verification failures before proceeding.
+# CLOSE ISSUES
 
-Use conventional commit messages for conflict-resolution or integration commits. Do not close issues, modify issue labels, push to `main`, or merge a pull request.
+For each branch that was merged, close its issue using the following command:
 
-Issues represented by these branches:
+`gh issue close <ID> --comment "Completed by Sandcastle"`
+
+Here are all the issues:
 
 {{ISSUES}}
 
-Once all safe merges and verification are complete, output `<promise>COMPLETE</promise>`.
+Once you've merged everything you can, output <promise>COMPLETE</promise>.

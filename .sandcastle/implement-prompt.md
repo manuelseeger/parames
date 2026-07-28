@@ -35,20 +35,19 @@ If applicable, use RGR to complete the task.
 
 # FEEDBACK LOOPS
 
-Before committing, run:
-
-```bash
-PARAMES_DEV_MODE=true uv sync --locked
-PARAMES_DEV_MODE=true uv run pytest
-```
+Before committing, run `npm run typecheck` and `npm run test` to ensure the tests pass.
 
 # COMMIT
 
 Make a git commit. The commit message must:
 
-1. Follow the conventional commit format (`type(scope): summary` or `type: summary`).
-2. Describe the completed task concisely.
-3. Do not include secrets or generated artifacts.
+1. Start with `RALPH:` prefix
+2. Include task completed + PRD reference
+3. Key decisions made
+4. Files changed
+5. Blockers or notes for next iteration
+
+Keep it concise.
 
 # THE ISSUE
 

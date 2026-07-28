@@ -1,10 +1,27 @@
 # Coding Standards
 
-- Target Python 3.13 and manage dependencies and commands with `uv`.
-- Prefer small, focused modules and straightforward control flow over new abstractions.
-- Use type hints for public interfaces and Pydantic models for validated data boundaries.
-- Keep configuration and secrets in settings or environment variables; never log credentials.
-- Preserve established FastAPI, service, persistence, and plugin boundaries.
-- Add focused `pytest` coverage for changed behavior; use Arrange–Act–Assert and descriptive `test_*` names.
-- Run tests with `PARAMES_DEV_MODE=true`; run the full suite before completion.
-- Use conventional commit messages.
+<!-- Customize this file with your project's coding standards.
+     The reviewer agent loads it during code review via @.sandcastle/CODING_STANDARDS.md
+     so these standards are enforced during review without costing tokens during implementation. -->
+
+## Style
+
+<!-- Example:
+- Use camelCase for variables and functions
+- Use PascalCase for classes and types
+- Prefer named exports over default exports
+-->
+
+## Testing
+
+<!-- Example:
+- Every public function must have at least one test
+- Use descriptive test names that explain the expected behavior
+-->
+
+## Architecture
+
+<!-- Example:
+- Keep modules focused on a single responsibility
+- Prefer composition over inheritance
+-->
