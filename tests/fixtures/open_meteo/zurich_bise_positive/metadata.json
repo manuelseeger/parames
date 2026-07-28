@@ -181,81 +181,80 @@
       "start": "2026-04-29T11:00:00+02:00",
       "end": "2026-04-29T20:00:00+02:00",
       "duration_hours": 9,
-      "avg_wind_speed_kmh": 15.690740740740742,
+      "avg_wind_speed_kmh": 15.655555555555557,
       "max_wind_speed_kmh": 19.3,
-      "avg_direction_deg": 52.9937453740921,
+      "avg_direction_deg": 52.87947453021559,
       "avg_precipitation_mm_per_hour": 0.0,
       "max_precipitation_mm_per_hour": 0.0,
-      "bise_pressure_gradient_hpa": 3.096296296296297,
+      "bise_pressure_gradient_hpa": 3.033333333333333,
       "models": [
         "ecmwf_ifs",
-        "icon_d2",
         "meteoswiss_icon_ch2"
       ],
       "dry_filter_applied": false,
-      "score": 74,
+      "score": 82,
       "classification": "strong",
       "hours": [
         {
           "time": "2026-04-29T09:00:00+02:00",
-          "avg_wind_speed_kmh": 8.933333333333334,
-          "avg_direction_deg": 23.678226476879956,
+          "avg_wind_speed_kmh": 8.65,
+          "avg_direction_deg": 23.0,
           "avg_precipitation_mm_per_hour": 0.0,
           "in_window": false
         },
         {
           "time": "2026-04-29T10:00:00+02:00",
-          "avg_wind_speed_kmh": 9.866666666666667,
-          "avg_direction_deg": 32.012255601362426,
+          "avg_wind_speed_kmh": 9.649999999999999,
+          "avg_direction_deg": 30.0,
           "avg_precipitation_mm_per_hour": 0.0,
           "in_window": false
         },
         {
           "time": "2026-04-29T11:00:00+02:00",
-          "avg_wind_speed_kmh": 10.766666666666666,
-          "avg_direction_deg": 36.00152669071974,
+          "avg_wind_speed_kmh": 10.65,
+          "avg_direction_deg": 33.5,
           "avg_precipitation_mm_per_hour": 0.0,
           "in_window": true
         },
         {
           "time": "2026-04-29T12:00:00+02:00",
-          "avg_wind_speed_kmh": 12.033333333333333,
-          "avg_direction_deg": 41.00611516180987,
+          "avg_wind_speed_kmh": 11.8,
+          "avg_direction_deg": 39.5,
           "avg_precipitation_mm_per_hour": 0.0,
           "in_window": true
         },
         {
           "time": "2026-04-29T13:00:00+02:00",
-          "avg_wind_speed_kmh": 12.766666666666666,
-          "avg_direction_deg": 49.65903520218757,
+          "avg_wind_speed_kmh": 12.65,
+          "avg_direction_deg": 50.5,
           "avg_precipitation_mm_per_hour": 0.0,
           "in_window": true
         },
         {
           "time": "2026-04-29T14:00:00+02:00",
-          "avg_wind_speed_kmh": 14.833333333333334,
-          "avg_direction_deg": 55.33282069289993,
+          "avg_wind_speed_kmh": 14.75,
+          "avg_direction_deg": 55.5,
           "avg_precipitation_mm_per_hour": 0.0,
           "in_window": true
         },
         {
           "time": "2026-04-29T15:00:00+02:00",
-          "avg_wind_speed_kmh": 16.633333333333336,
-          "avg_direction_deg": 56.99939016145612,
+          "avg_wind_speed_kmh": 16.65,
+          "avg_direction_deg": 57.5,
           "avg_precipitation_mm_per_hour": 0.0,
           "in_window": true
         },
         {
           "time": "2026-04-29T16:00:00+02:00",
-          "avg_wind_speed_kmh": 17.766666666666666,
-          "avg_direction_deg": 59.66619627955163,
+          "avg_wind_speed_kmh": 17.9,
+          "avg_direction_deg": 60.5,
           "avg_precipitation_mm_per_hour": 0.0,
           "in_window": true
         },
         {
           "time": "2026-04-29T17:00:00+02:00",
-          "avg_wind_speed_kmh": 18.566666666666666,
-          "avg_direction_deg": 59.99989843765718,
+          "avg_wind_speed_kmh": 18.65,
+          "avg_direction_deg": 60.5,
           "avg_precipitation_mm_per_hour": 0.0,
           "in_window": true
         },
