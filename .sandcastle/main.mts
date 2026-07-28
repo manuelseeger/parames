@@ -331,7 +331,7 @@ async function runIssue(issue: Issue, root: Root, baseBranch: string): Promise<{
       agent: sandcastle.claudeCode("claude-opus-4-8"),
       promptFile: "./.sandcastle/review-prompt.md",
       completionSignal: COMPLETE,
-      promptArgs: { TASK_ID: issue.id, ISSUE_TITLE: issue.title, BRANCH: branch, TARGET_BRANCH: target },
+      promptArgs: { TASK_ID: issue.id, ISSUE_TITLE: issue.title, BRANCH: branch, REVIEW_TARGET_BRANCH: target },
     });
     if (review.completionSignal !== COMPLETE) throw new Error("reviewer did not complete");
 
