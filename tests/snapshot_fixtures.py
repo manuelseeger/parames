@@ -21,6 +21,9 @@ class SnapshotForecastClient:
             )
             for request in metadata["requests"]
         }
+        self._captured_models = {
+            request["model"] for request in metadata["requests"]
+        }
         self._normalizer = OpenMeteoForecastClient()
 
     @property
@@ -53,6 +56,12 @@ class SnapshotForecastClient:
             ):
                 payload = self._payloads[request["name"]]
                 return self._normalizer._normalize_hourly_payload(payload, timezone)
+        if model not in self._captured_models:
+            # The profile evolved to request a model that predates this snapshot
+            # (e.g. icon_eu added after capture). Serve an empty forecast so the
+            # model simply contributes no data, leaving captured models to drive
+            # the result unchanged.
+            return {}
         raise AssertionError(
             f"Unexpected forecast request: {location.name=} {model=} {hourly_variables=}"
         )
