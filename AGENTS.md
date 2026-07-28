@@ -32,7 +32,7 @@ After a version bump, also update the `x-ci-trigger` field in ./deployment/docke
 
 For local testing start the API on port 7000
 
-Use playwright for testing the frontend in the browser.
+Use the playwright skill for testing the frontend in the browser.
 
 Always run all local code with PARAMES_DEV_MODE=true
 
