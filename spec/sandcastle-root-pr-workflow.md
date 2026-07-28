@@ -44,7 +44,7 @@ const planSchema = z.object({
 
 ### Branches and PRs
 
-- Detect the repository default branch from GitHub and use `origin/<default>`; never derive the base from the host's checked-out branch.
+- Use `SANDCASTLE_BASE_BRANCH` when set; otherwise detect the repository default branch from GitHub and use `origin/<base>`. Never derive the base from the host's checked-out branch.
 - Root and dependent branches both use `sandcastle/issue-{id}`.
 - New dependent branches start from the latest local root branch tip. Existing dependent branches are reused unchanged; do not merge newer root changes into them before retrying.
 - Dependent branches remain local. Keep merged local branches; clean worktrees may still be removed by Sandcastle.

@@ -34,7 +34,11 @@ const COMPLETE = "<promise>COMPLETE</promise>";
 
 // Bound iterative replanning so a malformed or constantly-changing backlog
 // cannot keep one scheduled invocation alive indefinitely.
-const MAX_ITERATIONS = 10;
+const MAX_ITERATIONS = Number(process.env.SANDCASTLE_MAX_ITERATIONS ?? 1);
+
+if (!Number.isInteger(MAX_ITERATIONS) || MAX_ITERATIONS < 1) {
+  throw new Error("SANDCASTLE_MAX_ITERATIONS must be a positive integer");
+}
 
 // Application dependencies are installed only for implement/review/merge
 // sandboxes. The planner uses no hooks because it only reads GitHub context.
@@ -88,6 +92,7 @@ type PullRequest = {
   state: string;
   isDraft: boolean;
   body: string;
+  baseRefName: string;
   mergedAt: string | null;
 };
 
@@ -159,7 +164,7 @@ function push(branch: string): void {
 // ---------------------------------------------------------------------------
 
 // Create the one deterministic empty commit needed when a brand-new root branch
-// still equals the default branch. A temporary worktree lets this script commit
+// still equals its configured base. A temporary worktree lets this script commit
 // on that branch without changing the operator's current checkout. Author data
 // is command-scoped so repository/user Git configuration remains untouched.
 function initializeRootBranch(rootId: string, branch: string): void {
@@ -177,17 +182,18 @@ function initializeRootBranch(rootId: string, branch: string): void {
   }
 }
 
-// Ask GitHub for the repository default branch. Never use the host's checked-out
-// branch, which may be an unrelated feature branch.
-function getDefaultBranch(): string {
-  return gh(["repo", "view", "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name"]);
+// Use an explicit base when requested; otherwise ask GitHub for the repository
+// default. Never use the host's checked-out branch, which may be unrelated.
+function getBaseBranch(): string {
+  const configured = process.env.SANDCASTLE_BASE_BRANCH?.trim();
+  return configured || gh(["repo", "view", "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name"]);
 }
 
 // Search every PR state for this head branch. Including closed/merged PRs is
 // essential: creating a replacement for a closed-unmerged PR would bypass the
 // workflow's required manual-intervention stop.
 function lookupPullRequest(branch: string): PullRequest | undefined {
-  const output = gh(["pr", "list", "--head", branch, "--state", "all", "--limit", "100", "--json", "number,state,isDraft,body,mergedAt"]);
+  const output = gh(["pr", "list", "--head", branch, "--state", "all", "--limit", "100", "--json", "number,state,isDraft,body,baseRefName,mergedAt"]);
   const prs = JSON.parse(output) as PullRequest[];
   return prs[0];
 }
@@ -206,10 +212,10 @@ function ensureClosureLine(pr: PullRequest, rootId: string): PullRequest {
 // Reconcile one root's local branch, published branch, and PR into a usable
 // state. Returning undefined stops only this root, allowing unrelated roots to
 // continue. Thrown publication/API failures are isolated by the caller.
-function ensureRoot(rootId: string, rootTitle: string, defaultBranch: string): Root | undefined {
+function ensureRoot(rootId: string, rootTitle: string, baseBranch: string): Root | undefined {
   const branch = branchFor(rootId);
   const remote = `refs/remotes/origin/${branch}`;
-  git(["fetch", "origin", defaultBranch, branch], true);
+  git(["fetch", "origin", baseBranch, branch], true);
 
   const hasLocal = branchExists(`refs/heads/${branch}`);
   const hasRemote = branchExists(remote);
@@ -228,16 +234,16 @@ function ensureRoot(rootId: string, rootTitle: string, defaultBranch: string): R
     // A published root without a local branch is resumed from the remote tip.
     git(["branch", branch, `origin/${branch}`]);
   } else if (!hasLocal) {
-    // A genuinely new root starts from the freshly fetched default branch.
-    git(["branch", branch, `origin/${defaultBranch}`]);
+    // A genuinely new root starts from the freshly fetched configured base.
+    git(["branch", branch, `origin/${baseBranch}`]);
   }
 
   // Look up the PR before initializing so retries never add another empty
   // commit to an already-published root.
   let pr = lookupPullRequest(branch);
   // A new PR needs a distinct head. Once made, this commit makes the branch
-  // differ from the default branch, so retries cannot create a duplicate.
-  if (!pr && isAncestor(branch, `origin/${defaultBranch}`) && isAncestor(`origin/${defaultBranch}`, branch)) {
+  // differ from the base branch, so retries cannot create a duplicate.
+  if (!pr && isAncestor(branch, `origin/${baseBranch}`) && isAncestor(`origin/${baseBranch}`, branch)) {
     initializeRootBranch(rootId, branch);
   }
   // Root branches are the only issue branches published to GitHub. Pushing
@@ -254,12 +260,17 @@ function ensureRoot(rootId: string, rootTitle: string, defaultBranch: string): R
     console.error(`  ✗ root #${rootId}: PR #${pr.number} was closed without merging`);
     return undefined;
   }
+  // Reused PRs must target the configured base as well as new ones.
+  if (pr && pr.baseRefName !== baseBranch) {
+    gh(["pr", "edit", String(pr.number), "--base", baseBranch]);
+    pr = { ...pr, baseRefName: baseBranch };
+  }
   // New roots immediately receive a draft aggregation PR. Existing open draft
   // and ready PRs are reused without changing their draft state.
   if (!pr) {
     const body = `Sandcastle is tracking this root issue.\n\nCloses #${rootId}`;
     gh([
-      "pr", "create", "--draft", "--base", defaultBranch, "--head", branch,
+      "pr", "create", "--draft", "--base", baseBranch, "--head", branch,
       "--title", `#${rootId}: ${rootTitle}`, "--body", body,
     ]);
     pr = lookupPullRequest(branch);
@@ -284,14 +295,14 @@ function ensureDependentBranch(issue: Issue, root: Root): string {
 // Run the implementer and reviewer in one shared sandbox. Completion requires
 // both explicit promises, even when no commit or diff is produced: a retry may
 // already contain valid work, or the target branch may already satisfy an issue.
-async function runIssue(issue: Issue, root: Root, defaultBranch: string): Promise<{ issue: Issue; branch: string; root: Root }> {
+async function runIssue(issue: Issue, root: Root, baseBranch: string): Promise<{ issue: Issue; branch: string; root: Root }> {
   // Root issues run directly on their aggregation branch. Dependents run on
   // their private local branch and are integrated in the merge phase.
   const branch = issue.id === root.id ? root.branch : ensureDependentBranch(issue, root);
 
-  // Review roots against the remote default branch and dependents against the
+  // Review roots against the remote configured base and dependents against the
   // complete local root branch, matching the user-visible integration diff.
-  const target = issue.id === root.id ? `origin/${defaultBranch}` : root.branch;
+  const target = issue.id === root.id ? `origin/${baseBranch}` : root.branch;
 
   // Reusing this sandbox means dependency installation happens once and the
   // reviewer sees every implementer commit and filesystem change.
@@ -447,11 +458,11 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   if (!plan.issues.length) break;
 
   // -------------------------------------------------------------------------
-  // Phase 2: Detect the base and prepare every affected root branch/PR
+  // Phase 2: Detect the configured base and prepare every affected root branch/PR
   // -------------------------------------------------------------------------
 
-  const defaultBranch = getDefaultBranch();
-  git(["fetch", "origin", defaultBranch]);
+  const baseBranch = getBaseBranch();
+  git(["fetch", "origin", baseBranch]);
   // Key roots by planner-provided ID so multiple ready dependents share one
   // publication/PR reconciliation operation during this round.
   const roots = new Map<string, Root>();
@@ -459,7 +470,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     if (roots.has(issue.rootId)) continue;
     try {
       // Publication, divergence, and closed-PR failures are isolated per root.
-      const root = ensureRoot(issue.rootId, issue.rootTitle, defaultBranch);
+      const root = ensureRoot(issue.rootId, issue.rootTitle, baseBranch);
       if (root?.pr.mergedAt) continue;
       if (root) roots.set(root.id, root);
       else unfinished.add(issue.rootId);
@@ -479,7 +490,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   // allSettled prevents one agent/container failure from cancelling other roots.
   const executable = plan.issues.filter((issue) => roots.has(issue.rootId));
   const settled = await Promise.allSettled(
-    executable.map((issue) => runIssue(issue, roots.get(issue.rootId)!, defaultBranch)),
+    executable.map((issue) => runIssue(issue, roots.get(issue.rootId)!, baseBranch)),
   );
   // Separate completed root work from completed dependent work. Dependents must
   // be grouped for merger agents; roots skip merging and go to PR finalization.
