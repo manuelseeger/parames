@@ -32,6 +32,11 @@ import { z } from "zod";
 // a newly-created commit is not enough to advance an issue through the workflow.
 const COMPLETE = "<promise>COMPLETE</promise>";
 
+// Reserve the higher-capacity model for work that coordinates or integrates
+// multiple issues; individual implementation and review use the standard one.
+const highCapAgent = sandcastle.claudeCode("claude-opus-5");
+const standardAgent = sandcastle.claudeCode("claude-sonnet-5");
+
 // Bound iterative replanning so a malformed or constantly-changing backlog
 // cannot keep one scheduled invocation alive indefinitely.
 const MAX_ITERATIONS = Number(process.env.SANDCASTLE_MAX_ITERATIONS ?? 1);
@@ -313,7 +318,7 @@ async function runIssue(issue: Issue, root: Root, baseBranch: string): Promise<{
     const implement = await sandbox.run({
       name: `implementer-${issue.id}`,
       maxIterations: 100,
-      agent: sandcastle.claudeCode("claude-opus-4-8"),
+      agent: standardAgent,
       promptFile: "./.sandcastle/implement-prompt.md",
       completionSignal: COMPLETE,
       promptArgs: {
@@ -328,7 +333,7 @@ async function runIssue(issue: Issue, root: Root, baseBranch: string): Promise<{
     const review = await sandbox.run({
       name: `reviewer-${issue.id}`,
       maxIterations: 100,
-      agent: sandcastle.claudeCode("claude-opus-4-8"),
+      agent: standardAgent,
       promptFile: "./.sandcastle/review-prompt.md",
       completionSignal: COMPLETE,
       promptArgs: { TASK_ID: issue.id, ISSUE_TITLE: issue.title, BRANCH: branch, REVIEW_TARGET_BRANCH: target },
@@ -363,7 +368,7 @@ async function mergeRoot(root: Root, completed: Array<{ issue: Issue; branch: st
     const result = await sandbox.run({
       name: `merger-${root.id}`,
       maxIterations: 100,
-      agent: sandcastle.claudeCode("claude-opus-4-8"),
+      agent: highCapAgent,
       promptFile: "./.sandcastle/merge-prompt.md",
       completionSignal: COMPLETE,
       promptArgs: {
@@ -436,7 +441,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
       // Planning requires GitHub/Claude tooling but no project dependency
       // installation, keeping every iterative plan pass lightweight.
       hooks: {}, sandbox: docker(), name: "planner", maxIterations: 1,
-      agent: sandcastle.claudeCode("claude-opus-4-8"), promptFile: "./.sandcastle/plan-prompt.md",
+      agent: highCapAgent, promptFile: "./.sandcastle/plan-prompt.md",
       output: sandcastle.Output.object({ tag: "plan", schema: planSchema }),
     });
     plan = result.output;
