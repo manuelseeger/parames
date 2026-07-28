@@ -16,6 +16,7 @@ Analyze the open issues and build a dependency graph. For each issue, determine 
 
 An issue B is **blocked by** issue A if:
 
+- A is a sub-issue of B
 - B requires code or infrastructure that A introduces
 - B and A modify overlapping files or modules, making concurrent work likely to produce merge conflicts
 - B's requirements depend on a decision or API shape that A will establish

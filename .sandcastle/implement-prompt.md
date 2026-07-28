@@ -39,9 +39,8 @@ Before committing, run `npm run typecheck` and `npm run test` to ensure the test
 
 # COMMIT
 
-Make a git commit. The commit message must:
+Make a git commit. The commit message must comply with conventional commits, and:
 
-1. Start with `RALPH:` prefix
 2. Include task completed + PRD reference
 3. Key decisions made
 4. Files changed
