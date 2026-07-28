@@ -14,7 +14,7 @@ The goal is a future-proof report contract baked into the evaluation pipeline so
 
 A single `EvaluationReport` is attached to `CandidateWindow.report` (so it persists in `Detection.window.report` automatically via pyodmongo) and ships over the existing `GET /detections/{id}` endpoint without an API change. New types, all in [domain.py](src/parames/domain.py):
 
-```
+```python
 class RuleEvaluation(MainBaseModel):
     name: str                  # e.g. "gust_factor", "model_agreement", "wind_in_range"
     observed: Any              # raw value the rule looked at
