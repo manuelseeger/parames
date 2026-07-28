@@ -94,6 +94,7 @@ class DeliveryChannelConfig(BaseModel):
 class SchedulerConfig(BaseModel):
     cron_hour: str = "*/6"
     cron_minute: str | None = None
+    jitter_seconds: int = Field(default=300, ge=0, le=900)
 
 
 class LoggingConfig(BaseModel):

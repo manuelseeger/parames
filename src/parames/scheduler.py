@@ -35,6 +35,8 @@ async def main() -> None:
         "kwargs": {"config_path": default_config_path()},
         "max_instances": 1,
         "coalesce": True,
+        # Avoid synchronizing with the many forecast clients running on the hour.
+        "jitter": settings.scheduler.jitter_seconds,
     }
 
     if settings.scheduler.cron_minute:
@@ -44,7 +46,12 @@ async def main() -> None:
 
 
     logger.info("Starting scheduler with config path: %s", default_config_path())
-    logger.info("Scheduler will run with cron_hour=%s and cron_minute=%s", settings.scheduler.cron_hour, settings.scheduler.cron_minute)
+    logger.info(
+        "Scheduler will run with cron_hour=%s, cron_minute=%s, jitter_seconds=%s",
+        settings.scheduler.cron_hour,
+        settings.scheduler.cron_minute,
+        settings.scheduler.jitter_seconds,
+    )
     scheduler.start()
 
     try:
