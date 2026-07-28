@@ -369,18 +369,43 @@ code, pre, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size
 /* ============ logs ============ */
 .log-entry {
   display: flex;
+  width: 100%;
   gap: 8px;
   padding: 5px 0;
+  border: 0;
   border-bottom: 1px solid #f0f4f8;
+  background: none;
+  color: inherit;
+  text-align: left;
   white-space: nowrap;
   overflow: hidden;
+  cursor: pointer;
 }
 
+.log-entry:hover { background: #f7fafc; }
+.log-entry:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+
 .log-message {
+  min-width: 0;
   font-family: "SF Mono", Menlo, Consolas, monospace;
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.log-entry.expanded {
+  display: block;
+  white-space: normal;
+  overflow: visible;
+}
+
+.log-entry.expanded .muted { display: block; margin-bottom: 4px; }
+.log-entry.expanded .log-message {
+  display: block;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: pre-wrap;
 }
 
 /* ============ utility ============ */

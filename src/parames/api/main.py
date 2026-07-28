@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Parames API",
     description="Wind alert definitions, detections, runs, and deliveries.",
-    version="0.1.4",
+    version="0.1.5",
     lifespan=lifespan,
     openapi_url="/api/openapi.json",
     docs_url="/api/docs",

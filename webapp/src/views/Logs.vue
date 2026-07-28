@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { api } from '../api.js';
 
-const entries = ref([]), nextCursor = ref(null), error = ref(null), newAvailable = ref(false), autoRefresh = ref(false), reverseOrder = ref(false);
+const entries = ref([]), nextCursor = ref(null), error = ref(null), newAvailable = ref(false), autoRefresh = ref(false), reverseOrder = ref(false), expandedLogIds = ref(new Set());
 const service = ref(''), minLevel = ref(''), search = ref('');
 const initialRun = new URLSearchParams((window.location.hash.split('?')[1] || '')).get('run_id') || '';
 const runId = ref(initialRun);
@@ -18,6 +18,12 @@ const filters = computed(() => {
 const displayedEntries = computed(() => reverseOrder.value ? [...entries.value].reverse() : entries.value);
 function plain(text) { return text.replace(/\x1B(?:[@-_][0-?]*[ -/]*[@-~]|\[[0-?]*[ -/]*[@-~])/g, ''); }
 function date(v) { return new Date(v).toLocaleString(); }
+function isExpanded(id) { return expandedLogIds.value.has(id); }
+function toggleExpanded(id) {
+  const ids = new Set(expandedLogIds.value);
+  ids.has(id) ? ids.delete(id) : ids.add(id);
+  expandedLogIds.value = ids;
+}
 async function refresh() {
   try { const page = await api.listLogs(filters.value); entries.value = page.entries; nextCursor.value = page.next_cursor; newAvailable.value = false; } catch (e) { error.value = e.message; }
 }
@@ -53,10 +59,19 @@ onBeforeUnmount(() => clearInterval(timer));
     <div v-if="error" class="error">{{ error }}</div>
     <div class="card" style="margin-top:12px">
       <div v-if="!entries.length" class="empty-state">No matching logs</div>
-      <div v-for="entry in displayedEntries" :key="entry.id" class="log-entry">
+      <button
+        v-for="entry in displayedEntries"
+        :key="entry.id"
+        type="button"
+        class="log-entry"
+        :class="{ expanded: isExpanded(entry.id) }"
+        :aria-expanded="isExpanded(entry.id)"
+        :title="isExpanded(entry.id) ? 'Collapse log entry' : 'Expand log entry'"
+        @click="toggleExpanded(entry.id)"
+      >
         <span class="muted">{{ date(entry.occurred_at) }} {{ entry.service }} {{ entry.level }}{{ entry.logger_name ? ' ' + entry.logger_name : '' }}</span>
         <span class="log-message">{{ plain(entry.text) }}</span>
-      </div>
+      </button>
       <button v-if="nextCursor" class="btn btn-sm" @click="loadMore">Load more</button>
     </div>
   </div>
