@@ -10,7 +10,7 @@ The following is deterministic GitHub context for this issue and its immediate f
 
 <issue-context>
 
-!`repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner); owner=${repo%/*}; name=${repo#*/}; gh api graphql -f query='query($owner:String!,$name:String!,$number:Int!) { repository(owner:$owner,name:$name) { issue(number:$number) { number title body labels(first:100) { nodes { name } } comments(first:100) { nodes { body } } parent { number title body labels(first:100) { nodes { name } } comments(first:100) { nodes { body } } } } } }' -F owner="$owner" -F name="$name" -F number={{TASK_ID}} --jq '.data.repository.issue'`
+!`repo=${GH_REPO:?GH_REPO is required}; owner=${repo%/*}; name=${repo#*/}; gh api graphql -f query='query($owner:String!,$name:String!,$number:Int!) { repository(owner:$owner,name:$name) { issue(number:$number) { number title body labels(first:100) { nodes { name } } comments(first:100) { nodes { body } } parent { number title body labels(first:100) { nodes { name } } comments(first:100) { nodes { body } } } } } }' -F owner="$owner" -F name="$name" -F number={{TASK_ID}} --jq '.data.repository.issue'`
 
 </issue-context>
 

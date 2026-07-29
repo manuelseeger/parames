@@ -4,7 +4,7 @@ Here are the open issues labeled `sandcastle`, including immediate formal parent
 
 <issues-json>
 
-!`repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner); owner=${repo%/*}; name=${repo#*/}; gh api graphql -f query='query($owner:String!,$name:String!,$labels:[String!]) { repository(owner:$owner,name:$name) { issues(first:100,states:OPEN,labels:$labels,orderBy:{field:CREATED_AT,direction:ASC}) { nodes { number title body labels(first:100) { nodes { name } } comments(first:100) { nodes { body } } parent { number title body labels(first:100) { nodes { name } } comments(first:100) { nodes { body } } } } } } }' -F owner="$owner" -F name="$name" -F labels[]=sandcastle --jq '.data.repository.issues.nodes'`
+!`repo=${GH_REPO:?GH_REPO is required}; owner=${repo%/*}; name=${repo#*/}; gh api graphql -f query='query($owner:String!,$name:String!,$labels:[String!]) { repository(owner:$owner,name:$name) { issues(first:100,states:OPEN,labels:$labels,orderBy:{field:CREATED_AT,direction:ASC}) { nodes { number title body labels(first:100) { nodes { name } } comments(first:100) { nodes { body } } parent { number title body labels(first:100) { nodes { name } } comments(first:100) { nodes { body } } } } } } }' -F owner="$owner" -F name="$name" -F labels[]=sandcastle --jq '.data.repository.issues.nodes'`
 
 </issues-json>
 

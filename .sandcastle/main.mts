@@ -60,7 +60,19 @@ function sbxOptions(scope: string): DockerSbxOptions {
     cpus,
     memory,
     timeoutMs,
+    // Isolated Git transfer intentionally does not rely on a guest remote.
+    // GH_REPO lets every guest-side gh command identify this repository.
+    env: { GH_REPO: githubRepository },
   };
+}
+
+// Resolve repository identity on the trusted host, where the checkout remote is
+// available, then pass only that public identifier into each microVM.
+const githubRepository = process.env.SANDCASTLE_GH_REPO?.trim()
+  || process.env.GH_REPO?.trim()
+  || gh(["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"]);
+if (!/^[^/\s]+\/[^/\s]+$/.test(githubRepository)) {
+  throw new Error("SANDCASTLE_GH_REPO must be an owner/repository identifier");
 }
 
 // Application dependencies are installed in every executable microVM sandbox.
