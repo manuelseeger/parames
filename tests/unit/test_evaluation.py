@@ -40,7 +40,7 @@ def test_vector_average_direction_wraps() -> None:
 
 
 def test_evaluate_hour_candidate_accepts_valid_hour(default_config, fixed_now) -> None:
-    profile = default_config.alerts[0]
+    profile = next(a for a in default_config.alerts if a.name == "zurich_bise")
     hour = HourForecast(
         time=fixed_now.replace(hour=12),
         wind_speed=11.0,  # >= min_speed_kmh 10.0
@@ -58,7 +58,7 @@ def test_evaluate_hour_candidate_accepts_valid_hour(default_config, fixed_now) -
 
 def test_evaluate_hour_candidate_does_not_reject_on_precipitation(default_config, fixed_now) -> None:
     """evaluate_hour_candidate does not filter on precipitation; that's done upstream."""
-    profile = default_config.alerts[0]
+    profile = next(a for a in default_config.alerts if a.name == "zurich_bise")
     hour = HourForecast(
         time=fixed_now.replace(hour=12),
         wind_speed=11.0,

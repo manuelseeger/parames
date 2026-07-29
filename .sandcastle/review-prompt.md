@@ -1,55 +1,31 @@
 # TASK
 
-Review the code changes on branch `{{BRANCH}}` and improve code clarity, consistency, and maintainability while preserving exact functionality.
+Review issue {{TASK_ID}}: {{ISSUE_TITLE}} on branch `{{BRANCH}}`.
 
-# CONTEXT
+# ISSUE CONTEXT
 
-## Branch diff
+<issue-context>
 
-!`git diff {{TARGET_BRANCH}}...{{BRANCH}}`
+!`repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner); owner=${repo%/*}; name=${repo#*/}; gh api graphql -f query='query($owner:String!,$name:String!,$number:Int!) { repository(owner:$owner,name:$name) { issue(number:$number) { number title body labels(first:100) { nodes { name } } comments(first:100) { nodes { body } } parent { number title body labels(first:100) { nodes { name } } comments(first:100) { nodes { body } } } } } }' -F owner="$owner" -F name="$name" -F number={{TASK_ID}} --jq '.data.repository.issue'`
 
-## Commits on this branch
+</issue-context>
 
-!`git log {{TARGET_BRANCH}}..{{BRANCH}} --oneline`
+# CHANGE CONTEXT
+
+## Diff
+
+!`git diff {{REVIEW_TARGET_BRANCH}}...{{BRANCH}}`
+
+## Commits
+
+!`git log {{REVIEW_TARGET_BRANCH}}..{{BRANCH}}`
 
 # REVIEW PROCESS
 
-1. **Understand the change**: Read the diff and commits above to understand the intent.
+Understand the issue, parent guidance, diff, and commits. Check correctness, acceptance criteria, edge cases, security, and appropriate test coverage. Follow repository instructions and run issue-appropriate verification. If fixes are needed and can be completed, apply and conventionally commit them.
 
-2. **Analyze for improvements**: Look for opportunities to:
-   - Reduce unnecessary complexity and nesting
-   - Eliminate redundant code and abstractions
-   - Improve readability through clear variable and function names
-   - Consolidate related logic
-   - Remove unnecessary comments that describe obvious code
-   - Avoid nested ternary operators - prefer switch statements or if/else chains
-   - Choose clarity over brevity - explicit code is often better than overly compact code
+Do not approve merely because the branch has commits. A no-diff issue may be complete if the target branch already satisfies it. If the issue cannot be validated as complete, preserve useful progress, leave a useful issue comment when appropriate, and do not output the completion promise.
 
-3. **Check correctness**:
-   - Does the implementation match the intent? Are edge cases handled?
-   - Are new/changed behaviours covered by tests?
-   - Are there unsafe casts, `any` types, or unchecked assumptions?
-   - Does the change introduce injection vulnerabilities, credential leaks, or other security issues?
+Only when review is complete and the issue is satisfied, output:
 
-4. **Maintain balance**: Avoid over-simplification that could:
-   - Reduce code clarity or maintainability
-   - Create overly clever solutions that are hard to understand
-   - Combine too many concerns into single functions or components
-   - Remove helpful abstractions that improve code organization
-   - Make the code harder to debug or extend
-
-5. **Apply project standards**: Follow the coding standards defined in @.sandcastle/CODING_STANDARDS.md
-
-6. **Preserve functionality**: Never change what the code does - only how it does it. All original features, outputs, and behaviors must remain intact.
-
-# EXECUTION
-
-If you find improvements to make:
-
-1. Make the changes directly on this branch
-2. Run `PARAMES_DEV_MODE=true uv sync --locked` and `PARAMES_DEV_MODE=true uv run pytest`
-3. Commit refinements with a conventional commit message
-
-If the code is already clean and well-structured, do nothing.
-
-Once complete, output <promise>COMPLETE</promise>.
+<promise>COMPLETE</promise>
