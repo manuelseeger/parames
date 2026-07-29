@@ -113,22 +113,19 @@ All branch publication and PR lifecycle actions belong in TypeScript orchestrati
 
 ### Sandbox environment
 
-Adapt `.sandcastle/Dockerfile` while retaining the template's UID/GID alignment and Claude Code setup:
+Sandcastle uses the Docker Sandboxes template in `.sandcastle/Dockerfile.sbx` for every phase. The template provides a private Docker daemon and the agent toolchain:
 
-- Node 22 on Debian Bookworm
-- Git, curl, jq, GitHub CLI
-- `uv` and Python 3.13
-- Claude Code CLI
-- Global Playwright CLI and Chromium plus required system libraries
-- No MongoDB service inside the sandbox
-- No forced `PARAMES_DEV_MODE` environment variable
+- Node 22, Git, curl, jq, GitHub CLI, and Claude Code
+- `uv` with Python 3.13
+- Aspire and its cached NuGet closure
+- No repository source, host worktree, host Docker socket, or long-lived secrets
 
-Use separate hooks:
+Use hooks appropriate to each phase:
 
 - Planner: no project dependency install.
-- Implement/reviewer/merger sandbox creation: `uv sync --locked` and `npm ci --prefix webapp`.
-- Implementer and reviewer share one sandbox, so dependencies install once for that pipeline.
-- Remove root `node_modules` copying; those packages are host-side Sandcastle orchestration dependencies, not application dependencies.
+- Implement/reviewer/merger sandbox creation: `uv sync --locked`, `npm ci --prefix webapp`, `npm ci --prefix aspire`, and `aspire restore --non-interactive`.
+- Implementer and reviewer share one castle, so dependencies install once for that pipeline.
+- Root `node_modules` remain host-side Sandcastle orchestration dependencies, not application dependencies.
 
 ## Manual steps for the owner
 
@@ -142,10 +139,13 @@ Use separate hooks:
    - Pull requests: read/write
 2. Put `GH_TOKEN` and either `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` in `.sandcastle/.env`. Never commit this file.
 3. Ensure the `sandcastle` issue label exists.
-4. Rebuild the sandbox image after Dockerfile changes:
+4. Build and load the microVM template after `Dockerfile.sbx` changes:
 
    ```bash
-   npm run sandcastle:build
+   docker build -f .sandcastle/Dockerfile.sbx -t parames-sbx:dev .
+   docker image save parames-sbx:dev -o /tmp/parames-sbx-dev.tar
+   sbx template load /tmp/parames-sbx-dev.tar
+   sbx diagnose
    ```
 
 5. Before the first real backlog run, create or select a small labeled test forest and confirm the inferred root/dependency relationships. Then run:
@@ -159,10 +159,10 @@ Use separate hooks:
 
 ## Proposed implementation sequence
 
-1. **Sandbox image**
-   - Add Python 3.13/`uv` and Playwright/Chromium.
-   - Preserve GitHub CLI, Claude Code, non-root user, UID/GID behavior, and entrypoint.
-   - Change project hooks and remove `copyToWorktree`.
+1. **MicroVM template**
+   - Build and load `.sandcastle/Dockerfile.sbx` with Python 3.13/`uv`, Aspire, and the agent toolchain.
+   - Preserve GitHub CLI, Claude Code, the non-root agent user, and the private Docker daemon.
+   - Transfer Git state through the isolated-provider contract and use runtime hooks for project dependencies.
 2. **Deterministic prompt context**
    - Add GraphQL `!` expansions for planner issue/parent input.
    - Add current issue/immediate parent expansions to implement, review, and merge prompts.
@@ -190,8 +190,8 @@ Use separate hooks:
 8. **Resumability and summaries**
    - Reuse branches/PRs, stop on no progress, and replace misleading unconditional `All done` output with completed/unfinished/error summaries.
 9. **Verification**
-   - Build the sandbox image.
-   - Smoke-check `python --version`, `uv --version`, `node --version`, `gh --version`, `playwright-cli`, and Chromium launch.
+   - Build and load the microVM template, then run `sbx diagnose`.
+   - Smoke-check `python --version`, `uv --version`, `node --version`, `gh --version`, `aspire --version`, and the private Docker daemon.
    - Run one standalone test issue and one two-level root/dependent test forest.
    - Confirm draft creation, dependency merge/push/comment/closure, root implementation, PR readiness, and label removal.
    - Rerun to verify branches/PRs are reused without duplicate initialization commits.

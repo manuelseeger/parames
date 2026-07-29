@@ -21,7 +21,7 @@
 
 import { execFileSync } from "node:child_process";
 import * as sandcastle from "@ai-hero/sandcastle";
-import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
+import { withDockerSbxProvider, type DockerSbxOptions } from "./docker-sbx-provider.mts";
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
@@ -45,8 +45,25 @@ if (!Number.isInteger(MAX_ITERATIONS) || MAX_ITERATIONS < 1) {
   throw new Error("SANDCASTLE_MAX_ITERATIONS must be a positive integer");
 }
 
-// Application dependencies are installed only for implement/review/merge
-// sandboxes. The planner uses no hooks because it only reads GitHub context.
+// Every Sandcastle phase runs in an sbx microVM. Defaults match the local
+// template build and the spike-proven 4 CPU / 8 GiB castle size.
+function sbxOptions(scope: string): DockerSbxOptions {
+  const cpus = Number(process.env.SANDCASTLE_SBX_CPUS ?? 4);
+  const memory = process.env.SANDCASTLE_SBX_MEMORY ?? "8g";
+  const timeoutMs = Number(process.env.SANDCASTLE_SBX_TIMEOUT_MS ?? 10 * 60_000);
+  if (!Number.isInteger(cpus) || cpus < 1 || !/^\d+(?:[gGmM])$/.test(memory) || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1) {
+    throw new Error("SANDCASTLE_SBX_CPUS, SANDCASTLE_SBX_MEMORY, and SANDCASTLE_SBX_TIMEOUT_MS must be positive");
+  }
+  return {
+    template: process.env.SANDCASTLE_SBX_TEMPLATE?.trim() || "parames-sbx:dev",
+    namePrefix: `parames-${process.env.SANDCASTLE_DEPLOYMENT_ID?.trim() || "local"}-${process.env.SANDCASTLE_INVOCATION_ID?.trim() || process.pid}-${scope}`,
+    cpus,
+    memory,
+    timeoutMs,
+  };
+}
+
+// Application dependencies are installed in every executable microVM sandbox.
 // Implementer and reviewer share one sandbox, so these commands run once for
 // that complete issue pipeline.
 const hooks = {
@@ -54,6 +71,8 @@ const hooks = {
     onSandboxReady: [
       { command: "uv sync --locked" },
       { command: "npm ci --prefix webapp" },
+      { command: "npm ci --prefix aspire" },
+      { command: "cd aspire && aspire restore --non-interactive" },
     ],
   },
 };
@@ -107,7 +126,7 @@ type PullRequest = {
 
 // Run argv directly without a shell. This prevents issue titles, branch names,
 // and generated PR text from being interpreted as shell syntax. Most failures
-// are fatal to the affected pipeline; expected probes can opt into an empty
+// are fatal to the affected pipeline; expected probes can request an empty
 // result with allowFailure.
 function command(command: string, args: string[], allowFailure = false): string {
   try {
@@ -309,47 +328,30 @@ async function runIssue(issue: Issue, root: Root, baseBranch: string): Promise<{
   // complete local root branch, matching the user-visible integration diff.
   const target = issue.id === root.id ? `origin/${baseBranch}` : root.branch;
 
-  // Reusing this sandbox means dependency installation happens once and the
-  // reviewer sees every implementer commit and filesystem change.
-  const sandbox = await sandcastle.createSandbox({ branch, sandbox: docker(), hooks });
-  try {
-    // The implementer may use multiple agent turns, but only its explicit
-    // completion signal allows the issue to proceed to review.
-    const implement = await sandbox.run({
-      name: `implementer-${issue.id}`,
-      maxIterations: 100,
-      agent: standardAgent,
-      promptFile: "./.sandcastle/implement-prompt.md",
-      completionSignal: COMPLETE,
-      promptArgs: {
-        TASK_ID: issue.id, ISSUE_TITLE: issue.title, ROOT_ID: root.id,
-        ROOT_TITLE: root.title, ROOT_BRANCH: root.branch, BRANCH: branch,
-      },
-    });
-    if (implement.completionSignal !== COMPLETE) throw new Error("implementer did not complete");
-
-    // Review always runs after implementation completion, including no-commit
-    // runs. It may fix and commit defects itself before promising completion.
-    const review = await sandbox.run({
-      name: `reviewer-${issue.id}`,
-      maxIterations: 100,
-      agent: standardAgent,
-      promptFile: "./.sandcastle/review-prompt.md",
-      completionSignal: COMPLETE,
-      promptArgs: { TASK_ID: issue.id, ISSUE_TITLE: issue.title, BRANCH: branch, REVIEW_TARGET_BRANCH: target },
-    });
-    if (review.completionSignal !== COMPLETE) throw new Error("reviewer did not complete");
-
-    // Uncommitted files cannot be merged or resumed reliably. Treat a dirty
-    // successful run as incomplete and let Sandcastle preserve its worktree.
-    const status = await sandbox.exec("git status --porcelain");
-    if (status.exitCode !== 0 || status.stdout.trim()) throw new Error("agent left the worktree dirty");
-    return { issue, branch, root };
-  } finally {
-    // Always stop the container. Sandcastle keeps dirty worktrees for recovery
-    // and may remove clean ones according to its native lifecycle behavior.
-    await sandbox.close();
-  }
+  // One provider scope owns exactly one shared castle for the complete issue
+  // pipeline. Its finally cleanup cannot affect a concurrently executing issue.
+  return withDockerSbxProvider(sbxOptions(`issue-${issue.id}`), async (provider) => {
+    const sandbox = await sandcastle.createSandbox({ branch, sandbox: provider, hooks });
+    try {
+      const implement = await sandbox.run({
+        name: `implementer-${issue.id}`, maxIterations: 100, agent: standardAgent,
+        promptFile: "./.sandcastle/implement-prompt.md", completionSignal: COMPLETE,
+        promptArgs: { TASK_ID: issue.id, ISSUE_TITLE: issue.title, ROOT_ID: root.id, ROOT_TITLE: root.title, ROOT_BRANCH: root.branch, BRANCH: branch },
+      });
+      if (implement.completionSignal !== COMPLETE) throw new Error("implementer did not complete");
+      const review = await sandbox.run({
+        name: `reviewer-${issue.id}`, maxIterations: 100, agent: standardAgent,
+        promptFile: "./.sandcastle/review-prompt.md", completionSignal: COMPLETE,
+        promptArgs: { TASK_ID: issue.id, ISSUE_TITLE: issue.title, BRANCH: branch, REVIEW_TARGET_BRANCH: target },
+      });
+      if (review.completionSignal !== COMPLETE) throw new Error("reviewer did not complete");
+      const status = await sandbox.exec("git status --porcelain");
+      if (status.exitCode !== 0 || status.stdout.trim()) throw new Error("agent left the worktree dirty");
+      return { issue, branch, root };
+    } finally {
+      await sandbox.close();
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -363,7 +365,8 @@ async function runIssue(issue: Issue, root: Root, baseBranch: string): Promise<{
 async function mergeRoot(root: Root, completed: Array<{ issue: Issue; branch: string }>): Promise<string[]> {
   // The merger works directly on the local root aggregation branch; it does
   // not create a separate synthetic merge branch.
-  const sandbox = await sandcastle.createSandbox({ branch: root.branch, sandbox: docker(), hooks });
+  await withDockerSbxProvider(sbxOptions(`merge-${root.id}`), async (provider) => {
+  const sandbox = await sandcastle.createSandbox({ branch: root.branch, sandbox: provider, hooks });
   try {
     const result = await sandbox.run({
       name: `merger-${root.id}`,
@@ -386,6 +389,7 @@ async function mergeRoot(root: Root, completed: Array<{ issue: Issue; branch: st
   } finally {
     await sandbox.close();
   }
+  });
 
   // Agent output does not decide merge success. A dependent's exact tip must
   // be an ancestor of the final root tip, naturally supporting partial batches.
@@ -437,13 +441,11 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
 
   let plan: z.infer<typeof planSchema>;
   try {
-    const result = await sandcastle.run({
-      // Planning requires GitHub/Claude tooling but no project dependency
-      // installation, keeping every iterative plan pass lightweight.
-      hooks: {}, sandbox: docker(), name: "planner", maxIterations: 1,
+    const result = await withDockerSbxProvider(sbxOptions(`planner-${iteration}`), (provider) => sandcastle.run({
+      hooks: {}, sandbox: provider, name: "planner", maxIterations: 1,
       agent: highCapAgent, promptFile: "./.sandcastle/plan-prompt.md",
       output: sandcastle.Output.object({ tag: "plan", schema: planSchema }),
-    });
+    }));
     plan = result.output;
   } catch (error) {
     // Without validated structured output there is no safe branch/root mapping,
@@ -492,7 +494,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   // -------------------------------------------------------------------------
 
   // Issues whose root could not be prepared are skipped for this round.
-  // allSettled prevents one agent/container failure from cancelling other roots.
+  // allSettled prevents one agent/castle failure from cancelling other roots.
   const executable = plan.issues.filter((issue) => roots.has(issue.rootId));
   const settled = await Promise.allSettled(
     executable.map((issue) => runIssue(issue, roots.get(issue.rootId)!, baseBranch)),
