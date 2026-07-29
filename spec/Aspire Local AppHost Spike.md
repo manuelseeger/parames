@@ -8,7 +8,7 @@ Aspire 13.4.6 successfully modeled and operated the Paramés API, MongoDB, optio
 
 Adoption conditions:
 
-1. Use a MongoDB-8-compatible host. This host runs Linux `7.0.3-arch1-2`; MongoDB's [SERVER-121912](https://jira.mongodb.org/browse/SERVER-121912) says every MongoDB 8.0+ version crashes on Linux 6.19+. The spike used the newest compatible official image, `mongo:7.0.39`, only as a host-specific workaround. Production Compose was not changed.
+1. Use a MongoDB-8-compatible host. This host runs Linux `7.0.3-arch1-2`; MongoDB's [SERVER-121912](https://jira.mongodb.org/browse/SERVER-121912) says every MongoDB 8.0+ version crashes on Linux 6.19+. The spike used the newest compatible official image, `mongo:7.0.39`, only as a host-specific workaround. Production Compose behavior was not changed.
 2. Remove generated fixed `profiles` ports from `aspire.config.json` (or have the lifecycle adapter generate unique profile ports). `aspire start --isolated` still collided with the generated `https://127.0.0.1:22102` resource-service port; removing the profile allowed two simultaneous AppHosts with random ports.
 3. Fix or explicitly accommodate the current Dockerfile's runtime behavior: it syncs before source is copied, so the editable project is not installed. The spike used `uv run --no-sync` and `PYTHONPATH=/app/src`. Plain `uv run` also attempted a dev sync and failed under Aspire's injected CA environment.
 

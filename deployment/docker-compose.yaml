@@ -1,5 +1,5 @@
 name: parames
-x-ci-trigger: "0.1.6"
+x-ci-trigger: "0.1.7"
 
 services:
   api:
