@@ -8,6 +8,7 @@
   },
   "scripts": {
     "sandcastle": "tsx --env-file=.sandcastle/.env .sandcastle/main.mts",
-    "sandcastle:build": "sandcastle docker build-image --dockerfile .sandcastle/Dockerfile"
+    "sandcastle:build": "sandcastle docker build-image --dockerfile .sandcastle/Dockerfile",
+    "sandcastle:provider:test": "tsx --test .sandcastle/docker-sbx-provider.test.mts"
   }
 }
