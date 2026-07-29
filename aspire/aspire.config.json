@@ -1,0 +1,13 @@
+{
+  "appHost": {
+    "path": "apphost.mts",
+    "language": "typescript/nodejs"
+  },
+  "sdk": {
+    "version": "13.4.6"
+  },
+  "channel": "stable",
+  "packages": {
+    "Aspire.Hosting.MongoDB": "13.4.6"
+  }
+}

@@ -16,18 +16,43 @@ Fetches hourly forecasts from [Open-Meteo](https://open-meteo.com/) across multi
 
 ## Setup
 
-Install dependencies:
+Install Python dependencies:
 
 ```powershell
 uv sync
 ```
 
-Before first run, seed alert definitions from YAML into MongoDB:
+## Local application environment
 
-```powershell
-uv run parames seed
-uv run parames seed --config config/default.yaml  # explicit path
+[Aspire](https://aspire.dev/) is the standard way to run the complete local Paramés environment. Install the Aspire CLI, Docker, and Node.js, then start the AppHost:
+
+```sh
+cd aspire
+aspire restore
+npm ci
+aspire start
 ```
+
+Aspire starts MongoDB, automatically runs the idempotent `parames seed` operation, and starts the API only after seeding succeeds. It injects `PARAMES_DEV_MODE=1`, so this environment cannot send real deliveries. Use the dashboard URL printed by `aspire start`, or inspect dynamically allocated API endpoints with:
+
+```sh
+aspire describe api --format Json
+```
+
+The scheduler is opt-in:
+
+```sh
+aspire resource scheduler start
+```
+
+To repeat the seed operation manually:
+
+```sh
+aspire resource api seed
+aspire logs seed
+```
+
+Stop the local environment with `aspire stop`.
 
 ## Usage
 
@@ -80,6 +105,8 @@ Key sections:
 | `PARAMES_DEV_MODE` | Set to `1` to redirect all delivery channels to console |
 
 ## Deployment
+
+Docker Compose remains in `deployment/` for the existing production deployment topology. Aspire owns the local application environment.
 
 Docker Compose runs three services: `api`, `scheduler`, and `mongo`.
 
