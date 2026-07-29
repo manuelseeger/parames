@@ -2,7 +2,7 @@
 
 Sandcastle runs every phase—planning, implementation, review, and merging—in a Docker Sandboxes microVM. Every open issue labeled `sandcastle` is processed in this runtime.
 
-The default local template is `parames-sbx:dev`, built from `Dockerfile.sbx`. The defaults allocate 4 CPUs, 8 GiB, and a ten-minute lifecycle timeout; override them with the `SANDCASTLE_SBX_*` variables in `.env.example`. Set deployment and invocation IDs in CI so castle names are ownership-scoped. Sandcastle resolves the GitHub repository from the host checkout and passes it to guests as `GH_REPO`; set `SANDCASTLE_GH_REPO=owner/repository` when the host checkout has no usable GitHub remote.
+The default local template is `parames-sbx:dev`, built from `Dockerfile.sbx`. The defaults allocate 4 CPUs, 8 GiB, and a 30-minute lifecycle timeout; override them with the `SANDCASTLE_SBX_*` variables in `.env.example`. Set deployment and invocation IDs in CI so castle names are ownership-scoped. Sandcastle resolves the GitHub repository from the host checkout and passes it to guests as `GH_REPO`; set `SANDCASTLE_GH_REPO=owner/repository` when the host checkout has no usable GitHub remote.
 
 Before scheduling work, run on a supported nested-virtualization host:
 

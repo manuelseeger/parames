@@ -50,7 +50,10 @@ if (!Number.isInteger(MAX_ITERATIONS) || MAX_ITERATIONS < 1) {
 function sbxOptions(scope: string): DockerSbxOptions {
   const cpus = Number(process.env.SANDCASTLE_SBX_CPUS ?? 4);
   const memory = process.env.SANDCASTLE_SBX_MEMORY ?? "8g";
-  const timeoutMs = Number(process.env.SANDCASTLE_SBX_TIMEOUT_MS ?? 10 * 60_000);
+  // A full implementation/review pipeline can include dependency install,
+  // browser verification, and a large agent turn. Ten minutes is too short
+  // for that work in a microVM; callers may still set a tighter CI limit.
+  const timeoutMs = Number(process.env.SANDCASTLE_SBX_TIMEOUT_MS ?? 30 * 60_000);
   if (!Number.isInteger(cpus) || cpus < 1 || !/^\d+(?:[gGmM])$/.test(memory) || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1) {
     throw new Error("SANDCASTLE_SBX_CPUS, SANDCASTLE_SBX_MEMORY, and SANDCASTLE_SBX_TIMEOUT_MS must be positive");
   }

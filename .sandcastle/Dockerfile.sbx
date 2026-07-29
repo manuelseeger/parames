@@ -12,8 +12,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   build-essential ca-certificates curl git gh jq \
   && rm -rf /var/lib/apt/lists/*
 
+# The base sandbox template ships a self-updating Claude binary in
+# /home/agent/.local/bin. Install the current npm release and put its bin
+# directory first so the VM cannot keep invoking the base image's older copy.
+RUN npm install --global @anthropic-ai/claude-code@latest \
+ && /usr/local/share/npm-global/bin/claude --version
+
 USER agent
-ENV PATH="/home/agent/.aspire/bin:/home/agent/.local/bin:${PATH}"
+ENV PATH="/usr/local/share/npm-global/bin:/home/agent/.aspire/bin:/home/agent/.local/bin:${PATH}"
 
 # uv manages the exact Python runtime independently of the Ubuntu base image.
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \

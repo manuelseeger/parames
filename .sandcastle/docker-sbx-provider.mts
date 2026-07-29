@@ -3,7 +3,7 @@ import {
   type IsolatedSandboxHandle,
   type IsolatedSandboxProvider,
 } from "@ai-hero/sandcastle";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -110,11 +110,15 @@ export async function createDockerSbxHandle(
       // Explicit agent commands still receive worktreePath as their cwd.
       const cwd = execOptions?.cwd ?? DEFAULT_HOME_PATH;
       const effectiveCommand = execOptions?.sudo ? `sudo ${commandText}` : commandText;
-      const child = execFile(
+      // Do not use execFile here: its maxBuffer applies to the complete child
+      // stdout even when we stream and bound our own retained output. Claude's
+      // stream-json protocol can exceed 64 KiB after a large Read result;
+      // execFile then terminates the agent mid-run. spawn has no such buffer.
+      const child = spawn(
         "sbx",
         ["exec", ...environmentArgs, name, "sh", "-lc", `cd ${shellQuote(cwd)} && ${effectiveCommand}`],
-        { maxBuffer: MAX_OUTPUT_CHARS, timeout: timeoutMs },
       );
+      const timeout = setTimeout(() => child.kill("SIGTERM"), timeoutMs);
 
       let stdout = "";
       let stderr = "";
@@ -139,8 +143,12 @@ export async function createDockerSbxHandle(
       if (execOptions?.stdin !== undefined) child.stdin?.end(execOptions.stdin);
 
       return await new Promise((resolve, reject) => {
-        child.once("error", reject);
+        child.once("error", (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        });
         child.once("close", (exitCode) => {
+          clearTimeout(timeout);
           if (pendingStdout) execOptions?.onLine?.(pendingStdout);
           if (pendingStderr) execOptions?.onLine?.(pendingStderr);
           resolve({ stdout, stderr, exitCode: exitCode ?? 1 });
