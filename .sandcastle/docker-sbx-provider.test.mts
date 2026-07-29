@@ -44,6 +44,13 @@ test("createDockerSbxHandle creates a shell-docker microVM with an empty host wo
   ]);
 });
 
+test("createDockerSbxHandle rejects an invalid lifecycle timeout", async () => {
+  await assert.rejects(
+    createDockerSbxHandle({ command: fakeCommand, timeoutMs: 0 }, {}),
+    /positive integer/,
+  );
+});
+
 test("createDockerSbxHandle removes a partially allocated VM when creation fails", async () => {
   commands.length = 0;
 

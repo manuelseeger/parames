@@ -26,7 +26,7 @@ type ExecResult = { stdout: string; stderr: string; exitCode: number };
 
 /** Minimal command seam: keeps provider tests independent of a local sbx installation. */
 export type SbxCommand = {
-  run(args: readonly string[]): Promise<void>;
+  run(args: readonly string[], timeoutMs?: number): Promise<void>;
 };
 
 export type DockerSbxOptions = {
@@ -38,6 +38,8 @@ export type DockerSbxOptions = {
   namePrefix?: string;
   cpus?: number;
   memory?: string;
+  /** Bound create, copy, and removal calls so a broken backend cannot hang a run. */
+  timeoutMs?: number;
   env?: Record<string, string>;
   command?: SbxCommand;
 };
@@ -50,8 +52,8 @@ const boundedAppend = (current: string, chunk: string): string => {
 };
 
 const defaultCommand: SbxCommand = {
-  async run(args) {
-    await execFileAsync("sbx", [...args], { maxBuffer: MAX_OUTPUT_CHARS });
+  async run(args, timeoutMs) {
+    await execFileAsync("sbx", [...args], { maxBuffer: MAX_OUTPUT_CHARS, timeout: timeoutMs });
   },
 };
 
@@ -70,9 +72,11 @@ export async function createDockerSbxHandle(
   env: Record<string, string>,
 ): Promise<IsolatedSandboxHandle> {
   const command = options.command ?? defaultCommand;
+  const template = options.template ?? DEFAULT_TEMPLATE;
+  const timeoutMs = options.timeoutMs ?? 10 * 60_000;
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1) throw new Error("sbx timeout must be a positive integer");
   const name = sandboxName(options.namePrefix ?? "parames-sbx");
   const emptyWorkspace = await mkdtemp(join(tmpdir(), "sandcastle-sbx-"));
-  const template = options.template ?? DEFAULT_TEMPLATE;
   let closed = false;
 
   try {
@@ -85,16 +89,16 @@ export async function createDockerSbxHandle(
       "--template", template,
       options.agent ?? "claude",
       emptyWorkspace,
-    ]);
+    ], timeoutMs);
   } catch (error) {
     // `sbx create` can fail after allocating the named VM. Best-effort removal
     // makes provider setup failure deterministic as well as normal close.
-    await command.run(["rm", "--force", name]).catch(() => undefined);
+    await command.run(["rm", "--force", name], timeoutMs).catch(() => undefined);
     await rm(emptyWorkspace, { recursive: true, force: true });
     throw error;
   }
 
-  const runSbx = async (args: readonly string[]): Promise<void> => command.run(args);
+  const runSbx = async (args: readonly string[]): Promise<void> => command.run(args, timeoutMs);
   const environmentArgs = Object.entries({ ...env, ...options.env })
     .flatMap(([key, value]) => ["-e", `${key}=${value}`]);
 
@@ -109,7 +113,7 @@ export async function createDockerSbxHandle(
       const child = execFile(
         "sbx",
         ["exec", ...environmentArgs, name, "sh", "-lc", `cd ${shellQuote(cwd)} && ${effectiveCommand}`],
-        { maxBuffer: MAX_OUTPUT_CHARS },
+        { maxBuffer: MAX_OUTPUT_CHARS, timeout: timeoutMs },
       );
 
       let stdout = "";
@@ -163,17 +167,6 @@ export async function createDockerSbxHandle(
     },
   };
 }
-
-/**
- * Docker Sandboxes microVM provider. It remains deliberately unwired: issue #11
- * validates the backend before a separate workflow-integration change.
- */
-export const dockerSbx = (options: DockerSbxOptions = {}) =>
-  createIsolatedSandboxProvider({
-    name: "docker-sbx",
-    env: options.env,
-    create: ({ env }) => createDockerSbxHandle(options, env),
-  });
 
 /**
  * Scope a provider to one complete Sandcastle operation.
