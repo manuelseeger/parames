@@ -18,8 +18,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN npm install --global @anthropic-ai/claude-code@latest \
  && /usr/local/share/npm-global/bin/claude --version
 
+# Install the browser runtime's OS libraries as root. The browser binary itself
+# is downloaded below as `agent`, so it is available from that user's cache.
+# playwright-cli opens the Chrome channel by default, so install it system-wide.
+RUN npm install --global @playwright/cli@latest \
+ && /usr/local/share/npm-global/lib/node_modules/@playwright/cli/node_modules/.bin/playwright install-deps chromium \
+ && /usr/local/share/npm-global/lib/node_modules/@playwright/cli/node_modules/.bin/playwright install chrome
+
 USER agent
 ENV PATH="/usr/local/share/npm-global/bin:/home/agent/.aspire/bin:/home/agent/.local/bin:${PATH}"
+
+# Download the Chromium driver into the runtime user's Playwright cache.
+RUN /usr/local/share/npm-global/lib/node_modules/@playwright/cli/node_modules/.bin/playwright install chromium
 
 # uv manages the exact Python runtime independently of the Ubuntu base image.
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \

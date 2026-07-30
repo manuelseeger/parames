@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import {
   createDockerSbxHandle,
@@ -20,28 +23,80 @@ const failingCreateCommand: SbxCommand = {
   },
 };
 
-test("createDockerSbxHandle creates a shell-docker microVM with an empty host workspace", async () => {
+async function makeProjectRoot(withSkills = true): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "sandcastle-project-"));
+  if (withSkills) {
+    const skills = join(root, ".claude", "skills", "example");
+    await mkdir(skills, { recursive: true });
+    await writeFile(join(skills, "SKILL.md"), "# Example\n");
+  }
+  return root;
+}
+
+test("createDockerSbxHandle copies approved project skills into an isolated microVM", async () => {
   commands.length = 0;
-  const handle = await createDockerSbxHandle({ command: fakeCommand, namePrefix: "test-sbx" }, { GH_TOKEN: "redacted" });
+  const projectRoot = await makeProjectRoot();
+  try {
+    const handle = await createDockerSbxHandle(
+      { command: fakeCommand, namePrefix: "test-sbx", projectRoot },
+      { GH_TOKEN: "redacted" },
+    );
 
-  assert.equal(handle.worktreePath, "/home/agent/workspace");
-  assert.deepEqual(commands[0]?.slice(0, 11), [
-    "create", "--name", commands[0]?.[2]!, "--cpus", "4", "--memory", "8g",
-    "--no-share-skills", "--template", "parames-sbx:dev", "claude",
-  ]);
-  assert.match(commands[0]?.[2] ?? "", /^test-sbx-/);
+    assert.equal(handle.worktreePath, "/home/agent/workspace");
+    assert.deepEqual(commands[0]?.slice(0, 11), [
+      "create", "--name", commands[0]?.[2]!, "--cpus", "4", "--memory", "8g",
+      "--no-share-skills", "--template", "parames-sbx:dev", "claude",
+    ]);
+    const name = commands[0]?.[2]!;
+    assert.match(name, /^test-sbx-/);
+    assert.deepEqual(commands.slice(1, 3), [
+      ["exec", name, "mkdir", "-p", "/home/agent/.claude"],
+      ["cp", join(projectRoot, ".claude", "skills"), `${name}:/home/agent/.claude/`],
+    ]);
 
-  await handle.copyIn("/tmp/repo.bundle", "/tmp/repo.bundle");
-  await handle.copyFileOut("/tmp/session.jsonl", "/tmp/session.jsonl");
-  await handle.close();
-  await handle.close();
+    await handle.copyIn("/tmp/repo.bundle", "/tmp/repo.bundle");
+    await handle.copyFileOut("/tmp/session.jsonl", "/tmp/session.jsonl");
+    await handle.close();
+    await handle.close();
 
-  const name = commands[0]?.[2]!;
-  assert.deepEqual(commands.slice(1), [
-    ["cp", "/tmp/repo.bundle", `${name}:/tmp/repo.bundle`],
-    ["cp", `${name}:/tmp/session.jsonl`, "/tmp/session.jsonl"],
-    ["rm", "--force", name],
-  ]);
+    assert.deepEqual(commands.slice(3), [
+      ["cp", "/tmp/repo.bundle", `${name}:/tmp/repo.bundle`],
+      ["cp", `${name}:/tmp/session.jsonl`, "/tmp/session.jsonl"],
+      ["rm", "--force", name],
+    ]);
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("createDockerSbxHandle skips skill provisioning when the project has no skills", async () => {
+  commands.length = 0;
+  const projectRoot = await makeProjectRoot(false);
+  try {
+    const handle = await createDockerSbxHandle({ command: fakeCommand, projectRoot }, {});
+    const name = commands[0]?.[2]!;
+    assert.equal(commands.length, 1);
+    await handle.close();
+    assert.deepEqual(commands[1], ["rm", "--force", name]);
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("createDockerSbxHandle rejects linked files in project skills and removes the VM", async () => {
+  commands.length = 0;
+  const projectRoot = await makeProjectRoot();
+  try {
+    await symlink("/etc/passwd", join(projectRoot, ".claude", "skills", "host-file"));
+    await assert.rejects(
+      createDockerSbxHandle({ command: fakeCommand, projectRoot, namePrefix: "unsafe-sbx" }, {}),
+      /unsupported entry/,
+    );
+    const name = commands[0]?.[2]!;
+    assert.deepEqual(commands.at(-1), ["rm", "--force", name]);
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
 });
 
 test("createDockerSbxHandle rejects an invalid lifecycle timeout", async () => {

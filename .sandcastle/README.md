@@ -4,6 +4,8 @@ Sandcastle runs every phase—planning, implementation, review, and merging—in
 
 The default local template is `parames-sbx:dev`, built from `Dockerfile.sbx`. The defaults allocate 4 CPUs, 8 GiB, and a 30-minute lifecycle timeout; override them with the `SANDCASTLE_SBX_*` variables in `.env.example`. Set deployment and invocation IDs in CI so castle names are ownership-scoped. Sandcastle resolves the GitHub repository from the host checkout and passes it to guests as `GH_REPO`; set `SANDCASTLE_GH_REPO=owner/repository` when the host checkout has no usable GitHub remote.
 
+Each castle receives a one-way snapshot of this checkout's `.claude/skills` directory at `/home/agent/.claude/skills`, when it exists. The global Docker Sandboxes skill store remains disabled, so skills are not shared between castles or mounted from the host. This directory is an approved non-secret agent input only: never place credentials, `.env` files, or host-specific sensitive configuration in it.
+
 Before scheduling work, run on a supported nested-virtualization host:
 
 ```sh
