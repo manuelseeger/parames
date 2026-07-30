@@ -3,10 +3,10 @@ import {
   type IsolatedSandboxHandle,
   type IsolatedSandboxProvider,
 } from "@ai-hero/sandcastle";
-import { execFile } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { execFile, spawn } from "node:child_process";
+import { lstat, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -36,6 +36,8 @@ export type DockerSbxOptions = {
   agent?: string;
   /** Prefix for discoverable, project-owned VM names. */
   namePrefix?: string;
+  /** Repository root whose approved `.claude/skills` tree is copied into each guest. */
+  projectRoot?: string;
   cpus?: number;
   memory?: string;
   /** Bound create, copy, and removal calls so a broken backend cannot hang a run. */
@@ -60,12 +62,53 @@ const defaultCommand: SbxCommand = {
 const sandboxName = (prefix: string): string =>
   `${prefix}-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
 
+/** Reject links and non-regular files so copying skills cannot escape the approved tree. */
+async function validateSkillsTree(path: string): Promise<boolean> {
+  let root;
+  try {
+    root = await lstat(path);
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+  if (!root.isDirectory() || root.isSymbolicLink()) {
+    throw new Error(`approved skills path must be a real directory: ${path}`);
+  }
+
+  const entries = await readdir(path, { withFileTypes: true });
+  for (const entry of entries) {
+    const child = join(path, entry.name);
+    if (entry.isSymbolicLink() || (!entry.isDirectory() && !entry.isFile())) {
+      throw new Error(`approved skills path contains unsupported entry: ${child}`);
+    }
+    if (entry.isDirectory()) await validateSkillsTree(child);
+  }
+  return true;
+}
+
+async function provisionProjectSkills(
+  command: SbxCommand,
+  name: string,
+  timeoutMs: number,
+  projectRoot: string | undefined,
+): Promise<void> {
+  const skillsPath = resolve(projectRoot ?? process.cwd(), ".claude", "skills");
+  if (!await validateSkillsTree(skillsPath)) return;
+
+  // This is a one-way snapshot, not a host mount or Docker Sandboxes' writable
+  // shared skill store. Claude discovers skills in this standard guest path.
+  await command.run(["exec", name, "mkdir", "-p", `${DEFAULT_HOME_PATH}/.claude`], timeoutMs);
+  await command.run(["cp", skillsPath, `${name}:${DEFAULT_HOME_PATH}/.claude/`], timeoutMs);
+}
+
 /**
  * Create the public Sandcastle isolated-provider handle around Docker Sandboxes.
  *
  * sbx needs a host workspace when creating a VM. This provider gives it a fresh,
  * empty directory only; Sandcastle then transfers its Git bundle with `sbx cp`.
  * No project worktree, Docker socket, or agent state is mounted from the host.
+ * The repository's explicitly approved `.claude/skills` tree is copied as a
+ * one-way snapshot into each guest; it is never shared between castles.
  */
 export async function createDockerSbxHandle(
   options: DockerSbxOptions,
@@ -90,6 +133,7 @@ export async function createDockerSbxHandle(
       options.agent ?? "claude",
       emptyWorkspace,
     ], timeoutMs);
+    await provisionProjectSkills(command, name, timeoutMs, options.projectRoot);
   } catch (error) {
     // `sbx create` can fail after allocating the named VM. Best-effort removal
     // makes provider setup failure deterministic as well as normal close.
@@ -110,11 +154,15 @@ export async function createDockerSbxHandle(
       // Explicit agent commands still receive worktreePath as their cwd.
       const cwd = execOptions?.cwd ?? DEFAULT_HOME_PATH;
       const effectiveCommand = execOptions?.sudo ? `sudo ${commandText}` : commandText;
-      const child = execFile(
+      // Do not use execFile here: its maxBuffer applies to the complete child
+      // stdout even when we stream and bound our own retained output. Claude's
+      // stream-json protocol can exceed 64 KiB after a large Read result;
+      // execFile then terminates the agent mid-run. spawn has no such buffer.
+      const child = spawn(
         "sbx",
         ["exec", ...environmentArgs, name, "sh", "-lc", `cd ${shellQuote(cwd)} && ${effectiveCommand}`],
-        { maxBuffer: MAX_OUTPUT_CHARS, timeout: timeoutMs },
       );
+      const timeout = setTimeout(() => child.kill("SIGTERM"), timeoutMs);
 
       let stdout = "";
       let stderr = "";
@@ -139,8 +187,12 @@ export async function createDockerSbxHandle(
       if (execOptions?.stdin !== undefined) child.stdin?.end(execOptions.stdin);
 
       return await new Promise((resolve, reject) => {
-        child.once("error", reject);
+        child.once("error", (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        });
         child.once("close", (exitCode) => {
+          clearTimeout(timeout);
           if (pendingStdout) execOptions?.onLine?.(pendingStdout);
           if (pendingStderr) execOptions?.onLine?.(pendingStderr);
           resolve({ stdout, stderr, exitCode: exitCode ?? 1 });
