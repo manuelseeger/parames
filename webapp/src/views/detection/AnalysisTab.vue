@@ -62,7 +62,7 @@ const profileOpen = ref(false);
 
       <!-- 4. Plugin reports -->
       <template v-if="report.plugin_reports?.length">
-        <h3 style="margin-bottom:8px; color:#52606d">Plugin Reports</h3>
+        <h3 style="margin-bottom:8px; color:var(--fg-secondary)">Plugin Reports</h3>
         <PluginReportCard
           v-for="pluginReport in report.plugin_reports"
           :key="pluginReport.type"

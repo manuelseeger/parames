@@ -84,7 +84,7 @@ const hourlyColumns = computed(() => {
       <!-- Notes -->
       <div v-if="report.notes?.length" style="margin-top:12px">
         <div class="plugin-subheader">Notes</div>
-        <ul style="margin:0; padding-left:16px; font-size:12px; color:#52606d">
+        <ul style="margin:0; padding-left:16px; font-size:12px; color:var(--fg-secondary)">
           <li v-for="(note, i) in report.notes" :key="i">{{ note }}</li>
         </ul>
       </div>
