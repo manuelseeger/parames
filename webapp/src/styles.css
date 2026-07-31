@@ -253,7 +253,6 @@ code, pre, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size
   border: 1px solid transparent;
   background: var(--bg-surface);
   color: var(--fg);
-  transition: background 0.1s;
 }
 
 .btn:hover { background: var(--bg-surface-hover); }
@@ -576,7 +575,7 @@ code, pre, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size
   border-radius: 8px;
   padding: 14px 16px;
   cursor: pointer;
-  transition: box-shadow 0.15s, border-color 0.15s;
+  transition: box-shadow 0.15s;
   outline: none;
 }
 
@@ -793,7 +792,6 @@ code, pre, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size
   cursor: pointer;
   margin-bottom: -1px;
   border-radius: 4px 4px 0 0;
-  transition: color 0.1s;
 }
 
 .tab-btn:hover { color: var(--fg); }
