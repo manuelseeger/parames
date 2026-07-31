@@ -31,7 +31,7 @@ function fmt(v) {
         <td class="num">{{ fmt(r.threshold) }}</td>
         <td><span :class="outcomeClass(r.outcome)">{{ r.outcome }}</span></td>
         <td class="num">{{ r.delta != null ? r.delta : '—' }}</td>
-        <td style="color:#7b8794">{{ r.message ?? '' }}</td>
+        <td style="color:var(--fg-muted)">{{ r.message ?? '' }}</td>
       </tr>
     </tbody>
   </table>

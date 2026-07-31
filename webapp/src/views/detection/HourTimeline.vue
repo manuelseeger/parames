@@ -32,7 +32,7 @@ const rows = computed(() => {
       class="hour-row"
       :class="{ 'in-window': row.inWindow, accepted: row.accepted, rejected: !row.accepted }"
     >
-      <span class="num" style="color:#52606d">{{ row.label }}</span>
+      <span class="num" style="color:var(--fg-secondary)">{{ row.label }}</span>
       <span
         class="outcome-pill"
         :class="row.accepted ? 'outcome-pass' : 'outcome-fail'"
@@ -43,7 +43,7 @@ const rows = computed(() => {
           :key="reason"
           class="rejection-chip"
         >{{ reason }}</span>
-        <span v-if="row.accepted && row.matching_models.length" style="font-size:11px; color:#7b8794">
+        <span v-if="row.accepted && row.matching_models.length" style="font-size:11px; color:var(--fg-muted)">
           {{ row.matching_models.join(', ') }}
         </span>
       </span>

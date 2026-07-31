@@ -4,7 +4,10 @@ import StatusPill from '../../components/ui/StatusPill.vue';
 
 const props = defineProps({ scoring: { type: Object, required: true } });
 
-const BAR_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316'];
+const BAR_COLORS = [
+  'var(--chart-cat-1)', 'var(--chart-cat-2)', 'var(--chart-cat-3)', 'var(--chart-cat-4)',
+  'var(--chart-cat-5)', 'var(--chart-cat-6)', 'var(--chart-cat-7)',
+];
 
 const segments = computed(() => {
   const s = props.scoring;
@@ -95,7 +98,7 @@ function n(v, dp = 2) {
     </table>
 
     <!-- Tier scale -->
-    <div style="margin-top:10px; font-size:11px; color:#7b8794">
+    <div style="margin-top:10px; font-size:11px; color:var(--fg-muted)">
       Score scale (0–100):
       <div class="tier-scale" style="margin-top:4px">
         <div
