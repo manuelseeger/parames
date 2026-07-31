@@ -42,10 +42,10 @@ const spark = computed(() => {
       &ensp;·&ensp;{{ detection.window.duration_hours }}h
     </div>
     <svg v-if="spark" viewBox="0 0 120 32" width="100%" height="38" preserveAspectRatio="none" class="sparkline-svg">
-      <rect x="0" y="0" width="120" height="32" fill="#f9fafb" rx="2"/>
-      <rect v-if="spark.band" :x="spark.band.x" y="0" :width="spark.band.width" height="32" fill="#dbeafe"/>
-      <path :d="spark.area" fill="#93c5fd" fill-opacity="0.45"/>
-      <polyline :points="spark.points" fill="none" stroke="#2563eb" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="0" y="0" width="120" height="32" fill="var(--chart-sparkline-bg)" rx="2"/>
+      <rect v-if="spark.band" :x="spark.band.x" y="0" :width="spark.band.width" height="32" fill="var(--accent-tint-bg)"/>
+      <path :d="spark.area" fill="var(--chart-point-context)" fill-opacity="0.45"/>
+      <polyline :points="spark.points" fill="none" stroke="var(--chart-line)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     <div v-else style="height:8px"/>
     <div class="detection-card-stats">
