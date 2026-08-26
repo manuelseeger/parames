@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from importlib.metadata import version
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -39,7 +40,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Parames API",
     description="Wind alert definitions, detections, runs, and deliveries.",
-    version="0.1.5",
+    version=version("parames"),
     lifespan=lifespan,
     openapi_url="/api/openapi.json",
     docs_url="/api/docs",
