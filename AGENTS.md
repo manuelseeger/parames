@@ -20,6 +20,3 @@ aspire-orchestration skill for app lifecycle
 
 Do not run the app directly unless specifically told to. 
 
-## Testing
-
-Observe `./docs/agents/testing-instructions.md`

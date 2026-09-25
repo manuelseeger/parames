@@ -4,10 +4,10 @@
     "language": "typescript/nodejs"
   },
   "sdk": {
-    "version": "13.4.6"
+    "version": "13.5.4"
   },
   "channel": "stable",
   "packages": {
-    "Aspire.Hosting.MongoDB": "13.4.6"
+    "Aspire.Hosting.MongoDB": "13.5.4"
   }
 }
