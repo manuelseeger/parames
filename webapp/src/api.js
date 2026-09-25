@@ -3,6 +3,7 @@ const BASE = '/api';
 async function request(path, opts = {}) {
   const res = await fetch(BASE + path, {
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
     ...opts,
   });
   if (!res.ok) {
@@ -17,9 +18,11 @@ async function request(path, opts = {}) {
         message = detail;
       }
     } catch {
-      message = await res.text();
+      message = `${res.status} ${res.statusText}`;
     }
-    throw new Error(message || `${res.status} ${res.statusText}`);
+    const error = new Error(message || `${res.status} ${res.statusText}`);
+    error.status = res.status;
+    throw error;
   }
   if (res.status === 204) return null;
   return res.json();
@@ -27,6 +30,10 @@ async function request(path, opts = {}) {
 
 export const api = {
   health: () => request('/healthz'),
+  me: () => request('/auth/me'),
+  login: (body) => request('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  signup: (body) => request('/auth/signup', { method: 'POST', body: JSON.stringify(body) }),
+  logout: () => request('/auth/logout', { method: 'POST' }),
 
   // alert definitions
   listAlertDefinitions: () => request('/alert-definitions'),

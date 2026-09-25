@@ -14,6 +14,11 @@ export function navigate(path) {
   window.location.hash = path;
 }
 
+export function replaceRoute(path) {
+  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${path}`);
+  route.value = path;
+}
+
 // Tiny matcher: returns null or a params object.
 // Pattern uses ":id" for placeholders, e.g. "/alerts/:id".
 export function match(pattern, path) {

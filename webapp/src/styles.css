@@ -167,6 +167,21 @@ h3 { font-size: 15px; margin: 0 0 8px; font-weight: 600; color: var(--fg-seconda
 
 code, pre, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
 
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: min(100%, 400px);
+}
+
+.auth-card .field { margin-bottom: 16px; }
+.auth-card input { width: 100%; }
+.auth-card p { margin-bottom: 0; }
+
 /* ============ shell ============ */
 .app {
   max-width: 1200px;
@@ -177,7 +192,8 @@ code, pre, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size
 .nav {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
   padding: 16px 0;
   border-bottom: 1px solid var(--border);
   margin-bottom: 24px;

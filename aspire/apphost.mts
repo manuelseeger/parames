@@ -24,8 +24,17 @@ const api = await builder
   // The app's router is mounted under /api; the ticket's /healthz reference is stale.
   .withHttpHealthCheck({ path: '/api/healthz', endpointName: 'http' });
 
-// `parames seed` runs automatically after MongoDB is healthy. The API waits for it
-// to finish, so a newly started AppHost presents a database with alert definitions.
+const adminPassword = process.env.PARAMES_ADMIN_PASSWORD;
+if (!adminPassword) throw new Error('Set PARAMES_ADMIN_PASSWORD before starting Aspire.');
+
+const migrate = await builder
+  .addDockerfile('migrate', '..', { dockerfilePath: 'Dockerfile' })
+  .withArgs(['uv', 'run', '--no-sync', 'python', '-m', 'parames.cli', 'migrate-users'])
+  .withEnvironment('PARAMES_MONGO_URI', database)
+  .withEnvironment('PARAMES_ADMIN_PASSWORD', adminPassword)
+  .withEnvironment('PYTHONPATH', '/app/src')
+  .waitFor(mongo);
+
 const seed = await builder
   .addDockerfile('seed', '..', { dockerfilePath: 'Dockerfile' })
   .withArgs(['uv', 'run', '--no-sync', 'python', '-m', 'parames.cli', 'seed'])
@@ -36,6 +45,7 @@ const seed = await builder
   .withEnvironment('PYTHONPATH', '/app/src')
   .waitFor(mongo);
 
+await seed.waitForCompletion(migrate);
 await api.waitForCompletion(seed);
 
 await api.withCommand(

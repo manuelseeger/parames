@@ -16,8 +16,9 @@ from parames.persistence import AlertRepository, build_engine
 from parames.persistence.models import AlertDefinition
 
 
-def _profile_to_definition(profile) -> AlertDefinition:
+def _profile_to_definition(profile, owner_id) -> AlertDefinition:
     return AlertDefinition(
+        owner_id=owner_id,
         name=profile.name,
         description=profile.description,
         enabled=True,
@@ -40,9 +41,10 @@ async def _seed(config_path: Path) -> None:
     settings = RuntimeSettings()
     engine = build_engine(settings.mongo_uri)
     repo = AlertRepository(engine)
+    admin = await repo.get_admin()
 
     for profile in app_config.alerts:
-        definition = _profile_to_definition(profile)
+        definition = _profile_to_definition(profile, admin.id)
         result = await repo.upsert_alert_definition(definition)
         click.echo(f"  Upserted: {result.name} (id={result.id})")
 

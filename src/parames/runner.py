@@ -10,6 +10,7 @@ from parames.domain import CandidateWindow
 from parames.evaluation import evaluate
 from parames.forecast import OpenMeteoForecastClient
 from parames.persistence import AlertRepository, build_engine
+from parames.persistence.models import User
 from parames.logging import run_log_context
 
 logger = logging.getLogger(__name__)
@@ -138,6 +139,12 @@ async def run(config_path: Path) -> None:
     try:
         with run_log_context(run_doc.id), OpenMeteoForecastClient() as client:
             for definition, profile in zip(definitions, resolved):
+                owner = await engine.find_one(Model=User, query=User.id == definition.owner_id)
+                if owner is None:
+                    raise ValueError(f"Missing owner for definition {definition.id}")
+                if owner.role != "admin" and any(channel_types.get(ch) != "console" for ch in profile.delivery):
+                    logger.warning("Skipping non-console delivery definition %s", definition.id)
+                    continue
                 profile_suppress = {
                     ch: _resolve_suppress(
                         profile.suppress_duplicates,
@@ -149,10 +156,11 @@ async def run(config_path: Path) -> None:
                 profile_windows = evaluate(profile, client=client, scoring=app_config.scoring)
                 windows_found += len(profile_windows)
                 for window in profile_windows:
-                    existing = await repo.find_matching_detection(profile.name, window)
+                    existing = await repo.find_matching_detection(definition.id, definition.owner_id, window)
                     detection_doc = await repo.upsert_detection(
                         window,
                         alert_definition_id=definition.id,
+                        owner_id=definition.owner_id,
                         run_id=run_doc.id,
                         existing=existing,
                     )
