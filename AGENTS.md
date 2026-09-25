@@ -3,21 +3,7 @@
 ## Implementing 
 
 Use conventional commit messages
-
-### Python standard
-
-Use: 
-- httpx
-- rich
-- click
-- fastapi
-- pyodmongo
-- pydantic
-- pydantic-settings
-- aiogram
-- pytest    
-
-uv for package managment and running
+gh cli for remote repo and issues
 
 ### Versioning
 
@@ -37,13 +23,3 @@ Do not run the app directly unless specifically told to.
 ## Testing
 
 Observe `./docs/agents/testing-instructions.md`
-
-## Agent skills
-
-### Issue tracker
-
-Issues for this repo are tracked in GitHub Issues for the current repository. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Label `sandcastle` marks a ticket as implementable by agent without human interaction. 
