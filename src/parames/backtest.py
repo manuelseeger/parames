@@ -22,13 +22,15 @@ async def _persist_windows(
     profile_name: str,
     windows: list[CandidateWindow],
     alert_definition_id,
+    owner_id,
     run_id,
 ) -> None:
     for window in windows:
-        existing = await repo.find_matching_detection(profile_name, window, is_backtest=True)
+        existing = await repo.find_matching_detection(alert_definition_id, owner_id, window, is_backtest=True)
         await repo.upsert_detection(
             window,
             alert_definition_id=alert_definition_id,
+            owner_id=owner_id,
             run_id=run_id,
             existing=existing,
             is_backtest=True,
@@ -47,12 +49,14 @@ async def _run_backtest(
     channel = ConsoleChannel()
     repo: AlertRepository | None = None
     run_doc = None
+    admin_id = None
     total_windows = 0
 
     if persist:
         settings = RuntimeSettings()
         engine = build_engine(settings.mongo_uri)
         repo = AlertRepository(engine)
+        admin_id = (await repo.get_admin()).id
 
     for profile in profiles:
         click.echo(f"Fetching historical forecast for {profile.name} on {capture_date}…")
@@ -67,7 +71,7 @@ async def _run_backtest(
         await channel.deliver(profile.name, windows)
 
         if persist and repo is not None and windows:
-            definition = await repo.get_alert_definition_by_name(profile.name)
+            definition = await repo.get_alert_definition_by_name(profile.name, owner_id=admin_id)
             if definition is None:
                 click.echo(
                     f"  ⚠ No DB definition for {profile.name!r} — skipping persistence. "
@@ -90,6 +94,7 @@ async def _run_backtest(
                 profile_name=profile.name,
                 windows=windows,
                 alert_definition_id=definition.id,
+                owner_id=admin_id,
                 run_id=run_doc.id,
             )
             click.echo(f"  Saved {len(windows)} detection(s) to database.")

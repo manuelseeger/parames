@@ -10,6 +10,7 @@ from parames.capture import capture_command
 from parames.forecast import ForecastClientError
 from parames.runner import default_config_path, run
 from parames.seed import seed_command
+from parames.migrate_users import migrate_users_command
 
 
 @click.group()
@@ -35,6 +36,7 @@ def run_command(config_path: Path) -> None:
 
 
 main.add_command(seed_command)
+main.add_command(migrate_users_command)
 main.add_command(capture_command)
 main.add_command(backtest_command)
 

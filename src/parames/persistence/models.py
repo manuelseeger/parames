@@ -17,6 +17,8 @@ from parames.domain import CandidateWindow, Classification
 from parames.plugins.bise import BisePluginConfig
 from parames.plugins.laminar import LaminarPluginConfig
 
+ADMIN_EMAIL = "mail@manuelseeger.de"
+
 RunStatus = Literal["running", "completed", "failed"]
 DeliveryStatus = Literal["sent", "failed", "skipped"]
 LogService = Literal["api", "scheduler"]
@@ -27,8 +29,31 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class User(DbModel):
+    email: str
+    password_hash: str
+    role: Literal["regular", "admin"] = "regular"
+    migration_owner: bool = False
+
+    _collection: ClassVar = "users"
+    _indexes: ClassVar = [IndexModel([("email", ASCENDING)], unique=True, name="user_email_unique")]
+
+
+class Session(DbModel):
+    token_digest: str
+    user_id: Id
+    expires_at: datetime
+
+    _collection: ClassVar = "sessions"
+    _indexes: ClassVar = [
+        IndexModel([("token_digest", ASCENDING)], unique=True, name="session_digest_unique"),
+        IndexModel([("expires_at", ASCENDING)], expireAfterSeconds=0, name="session_expiry"),
+    ]
+
+
 class AlertDefinition(DbModel):
-    name: str = Field(index=True)
+    owner_id: Id
+    name: str
     description: str | None = None
     enabled: bool = True
     location: LocationConfig
@@ -49,7 +74,7 @@ class AlertDefinition(DbModel):
 
     _collection: ClassVar = "alert_definitions"
     _indexes: ClassVar = [
-        IndexModel([("name", ASCENDING)], name="alert_definition_name_unique", unique=True),
+        IndexModel([("owner_id", ASCENDING), ("name", ASCENDING)], name="owner_name_unique", unique=True),
     ]
 
 
@@ -72,6 +97,7 @@ class Run(DbModel):
 
 
 class Detection(DbModel):
+    owner_id: Id
     alert_definition_id: Id
     alert_name: str = Field(index=True)
     local_date: str
@@ -93,6 +119,7 @@ class Detection(DbModel):
             name="alert_local_date_start",
         ),
         IndexModel([("alert_definition_id", ASCENDING)], name="alert_definition_id"),
+        IndexModel([("owner_id", ASCENDING), ("start", DESCENDING)], name="owner_start"),
     ]
 
 

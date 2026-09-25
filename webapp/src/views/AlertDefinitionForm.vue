@@ -6,6 +6,7 @@ import LocationFields from '../components/forms/LocationFields.vue';
 
 const props = defineProps({
   id: { type: String, default: null },
+  isAdmin: { type: Boolean, default: false },
 });
 
 function emptyDefinition() {
@@ -139,11 +140,12 @@ async function submit() {
   error.value = null;
   try {
     def.models = parseList(modelsText.value);
-    def.delivery = parseList(deliveryText.value);
+    def.delivery = props.isAdmin ? parseList(deliveryText.value) : ['console'];
 
     const payload = JSON.parse(JSON.stringify(def));
     delete payload.id;
     delete payload._id;
+    delete payload.owner_id;
     delete payload.created_at;
     delete payload.updated_at;
     const s = payload.wind.strong_speed_kmh;
@@ -409,8 +411,15 @@ function cancel() { navigate('/alerts'); }
       <section class="card">
         <h2>Delivery</h2>
         <div class="field">
-          <label>Channel names <span class="muted">(comma-separated; defined in YAML)</span></label>
-          <input type="text" v-model="deliveryText" placeholder="console, telegram" required>
+          <template v-if="isAdmin">
+            <label>Channel names <span class="muted">(comma-separated; defined in YAML)</span></label>
+            <input type="text" v-model="deliveryText" placeholder="console, telegram" required>
+          </template>
+          <template v-else>
+            <label>Channel</label>
+            <input type="text" value="console" readonly>
+            <div class="field-help">Your alerts use console delivery.</div>
+          </template>
         </div>
       </section>
 

@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from parames.api.deps import Repo
+from parames.api.auth import AdminDependency
 from parames.persistence.models import LogEntry
 
 router = APIRouter(prefix="/logs", tags=["logs"])
@@ -35,6 +36,7 @@ def _cursor(entry: LogEntry) -> str:
 @router.get("", response_model=LogPage)
 async def list_logs(
     repo: Repo,
+    admin: AdminDependency,
     limit: int = Query(default=200, ge=1, le=200),
     service: Literal["api", "scheduler"] | None = None,
     min_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] | None = None,

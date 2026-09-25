@@ -1,5 +1,5 @@
 name: parames
-x-ci-trigger: "0.2.3"
+x-ci-trigger: "0.4.0"
 
 services:
   api:
@@ -11,9 +11,10 @@ services:
       PARAMES_CONFIG_PATH: /app/config/default.yaml
       PARAMES_MONGO_URI: mongodb://mongo:27017/parames
       PARAMES_TELEGRAM_BOT_TOKEN: ${PARAMES_TELEGRAM_BOT_TOKEN}
+      PARAMES_COOKIE_SECURE: ${PARAMES_COOKIE_SECURE:-0}
       PYTHONUNBUFFERED: "1"
     ports:
-      - "8090:8000"
+      - "127.0.0.1:8090:8000"
     depends_on:
       mongo:
         condition: service_healthy

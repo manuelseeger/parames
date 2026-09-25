@@ -11,6 +11,7 @@ from pyodmongo import AsyncDbEngine
 from parames.domain import CandidateWindow
 from parames.forecast import ZURICH_TIMEZONE
 from parames.persistence.models import (
+    ADMIN_EMAIL,
     AlertDefinition,
     Delivery,
     DeliveryStatus,
@@ -18,6 +19,7 @@ from parames.persistence.models import (
     Run,
     RunStatus,
     LogEntry,
+    User,
 )
 
 
@@ -32,7 +34,7 @@ def local_date_for_window(window: CandidateWindow) -> str:
 
 
 def is_same_event(prior: CandidateWindow, candidate: CandidateWindow) -> bool:
-    """The dedupe heuristic in one place — must mirror the Mongo query in find_matching_detection."""
+    """Compare window overlap."""
     if prior.alert_name != candidate.alert_name:
         return False
     if local_date_for_window(prior) != local_date_for_window(candidate):
@@ -50,19 +52,24 @@ class AlertRepository:
 
     # ------------- Alert definitions (CRUD) -------------
 
-    async def list_alert_definitions(self, *, enabled_only: bool = False) -> list[AlertDefinition]:
-        query = AlertDefinition.enabled == True if enabled_only else None  # noqa: E712
-        results = await self._engine.find_many(Model=AlertDefinition, query=query)
+    async def list_alert_definitions(self, *, enabled_only: bool = False, owner_id=None) -> list[AlertDefinition]:
+        query: dict = {}
+        if enabled_only:
+            query["enabled"] = True
+        if owner_id is not None:
+            query["owner_id"] = ObjectId(str(owner_id))
+        results = await self._engine.find_many(Model=AlertDefinition, raw_query=query or None)
         return list(results)
 
-    async def get_alert_definition(self, definition_id) -> AlertDefinition | None:
-        return await self._engine.find_one(
-            Model=AlertDefinition, query=AlertDefinition.id == definition_id
-        )
+    async def get_alert_definition(self, definition_id, *, owner_id=None) -> AlertDefinition | None:
+        query = {"_id": ObjectId(str(definition_id))}
+        if owner_id is not None:
+            query["owner_id"] = ObjectId(str(owner_id))
+        return await self._engine.find_one(Model=AlertDefinition, raw_query=query)
 
-    async def get_alert_definition_by_name(self, name: str) -> AlertDefinition | None:
+    async def get_alert_definition_by_name(self, name: str, *, owner_id) -> AlertDefinition | None:
         return await self._engine.find_one(
-            Model=AlertDefinition, query=AlertDefinition.name == name
+            Model=AlertDefinition, raw_query={"name": name, "owner_id": ObjectId(str(owner_id))}
         )
 
     async def create_alert_definition(self, definition: AlertDefinition) -> AlertDefinition:
@@ -73,18 +80,25 @@ class AlertRepository:
 
     async def update_alert_definition(self, definition: AlertDefinition) -> AlertDefinition:
         definition.updated_at = _utcnow()
-        await self._engine.save(definition)
+        result = await self._engine.save(
+            definition,
+            raw_query={"_id": ObjectId(str(definition.id)), "owner_id": ObjectId(str(definition.owner_id))},
+            upsert=False,
+        )
+        if result.matched_count == 0:
+            raise LookupError("Alert definition no longer exists")
         return definition
 
-    async def delete_alert_definition(self, definition_id) -> bool:
-        response = await self._engine.delete(
-            Model=AlertDefinition, query=AlertDefinition.id == definition_id
-        )
+    async def delete_alert_definition(self, definition_id, *, owner_id=None) -> bool:
+        query = {"_id": ObjectId(str(definition_id))}
+        if owner_id is not None:
+            query["owner_id"] = ObjectId(str(owner_id))
+        response = await self._engine.delete(Model=AlertDefinition, raw_query=query)
         return getattr(response, "deleted_count", 0) > 0
 
     async def upsert_alert_definition(self, definition: AlertDefinition) -> AlertDefinition:
-        """Idempotent create-or-replace by `name`. Used by the seed command."""
-        existing = await self.get_alert_definition_by_name(definition.name)
+        """Idempotent create-or-replace by owner and name."""
+        existing = await self.get_alert_definition_by_name(definition.name, owner_id=definition.owner_id)
         if existing is None:
             return await self.create_alert_definition(definition)
         definition.id = existing.id
@@ -169,10 +183,11 @@ class AlertRepository:
     # ------------- Detections (formerly alerts) -------------
 
     async def find_matching_detection(
-        self, alert_name: str, window: CandidateWindow, *, is_backtest: bool = False
+        self, alert_definition_id, owner_id, window: CandidateWindow, *, is_backtest: bool = False
     ) -> Detection | None:
         query = (
-            (Detection.alert_name == alert_name)
+            (Detection.alert_definition_id == alert_definition_id)
+            & (Detection.owner_id == owner_id)
             & (Detection.local_date == local_date_for_window(window))
             & (Detection.start < window.end)
             & (Detection.end > window.start)
@@ -185,12 +200,14 @@ class AlertRepository:
         window: CandidateWindow,
         *,
         alert_definition_id,
+        owner_id,
         run_id,
         existing: Detection | None,
         is_backtest: bool = False,
     ) -> Detection:
         if existing is None:
             doc = Detection(
+                owner_id=owner_id,
                 alert_definition_id=alert_definition_id,
                 alert_name=window.alert_name,
                 local_date=local_date_for_window(window),
@@ -217,14 +234,27 @@ class AlertRepository:
         return doc
 
     async def list_detections(
-        self, *, limit: int = 100, is_backtest: bool | None = None
+        self, *, limit: int = 100, is_backtest: bool | None = None, owner_id=None
     ) -> list[Detection]:
-        query = None if is_backtest is None else (Detection.is_backtest == is_backtest)
-        results = await self._engine.find_many(Model=Detection, query=query, raw_sort={"start": -1})
+        query: dict = {}
+        if is_backtest is not None:
+            query["is_backtest"] = is_backtest
+        if owner_id is not None:
+            query["owner_id"] = ObjectId(str(owner_id))
+        results = await self._engine.find_many(Model=Detection, raw_query=query or None, raw_sort={"start": -1}, no_paginate_limit=limit)
         return list(results)[:limit]
 
-    async def get_detection(self, detection_id) -> Detection | None:
-        return await self._engine.find_one(Model=Detection, query=Detection.id == detection_id)
+    async def get_detection(self, detection_id, *, owner_id=None) -> Detection | None:
+        query = {"_id": ObjectId(str(detection_id))}
+        if owner_id is not None:
+            query["owner_id"] = ObjectId(str(owner_id))
+        return await self._engine.find_one(Model=Detection, raw_query=query)
+
+    async def get_admin(self) -> User:
+        user = await self._engine.find_one(Model=User, query=User.email == ADMIN_EMAIL)
+        if user is None or user.role != "admin":
+            raise ValueError("Admin account missing. Run 'parames migrate-users' first.")
+        return user
 
     # ------------- Deliveries -------------
 
